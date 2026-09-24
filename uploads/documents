@@ -1,0 +1,7 @@
+if (isset($_FILES['official_doc'])) {
+    $upload = uploadApplicationFile($_FILES['official_doc'], 'documents', ['pdf', 'xlsx', 'csv']);
+    if ($upload['success']) {
+        $doc_path = $upload['path'];
+        // Save document path to database repository
+    }
+}

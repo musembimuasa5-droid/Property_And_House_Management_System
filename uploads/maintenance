@@ -1,0 +1,7 @@
+if (isset($_FILES['issue_attachment'])) {
+    $upload = uploadApplicationFile($_FILES['issue_attachment'], 'maintenance', ['jpg', 'jpeg', 'png']);
+    if ($upload['success']) {
+        $attachment_path = $upload['path'];
+        // Log ticket into maintenance table with image reference
+    }
+}

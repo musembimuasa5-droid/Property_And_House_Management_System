@@ -1,0 +1,7 @@
+if (isset($_FILES['lease_agreement'])) {
+    $upload = uploadApplicationFile($_FILES['lease_agreement'], 'tenants', ['pdf', 'doc', 'docx']);
+    if ($upload['success']) {
+        $lease_doc_path = $upload['path'];
+        // Insert record into tenants table
+    }
+}

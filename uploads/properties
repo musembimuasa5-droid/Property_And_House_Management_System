@@ -1,0 +1,18 @@
+require_once 'includes/upload_helper.php';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $title = $_POST['property_name'] ?? '';
+    $location = $_POST['location'] ?? ''; // e.g., Roysambu, Nairobi
+    
+    $image_path = null;
+    if (isset($_FILES['property_image'])) {
+        $upload = uploadApplicationFile($_FILES['property_image'], 'properties', ['jpg', 'jpeg', 'png']);
+        if ($upload['success']) {
+            $image_path = $upload['path'];
+        } else {
+            $error = $upload['error'];
+        }
+    }
+
+    // Save $title, $location, and $image_path to database via PDO...
+}

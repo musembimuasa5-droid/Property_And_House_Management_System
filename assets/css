@@ -1,0 +1,69 @@
+/* ==========================================================================
+   Nairobi Property Management SaaS - Custom Application Styles
+   ========================================================================== */
+
+:root {
+    --color-primary: #1e40af;   /* Deep Blue */
+    --color-secondary: #0f172a; /* Dark Slate / Navy */
+    --color-accent: #f59e0b;    /* Warm Amber */
+    --color-success: #10b981;   /* Emerald Green */
+    --color-danger: #ef4444;    /* Crimson Red */
+}
+
+/* Base Body Styling */
+body {
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background-color: #f8fafc;
+    color: #1e293b;
+    margin: 0;
+    padding: 0;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Custom Scrollbar for Dashboards & Tables */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* Custom Card Hover Transitions */
+.property-card {
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.property-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+}
+
+/* Print Styles for Receipts and Invoices */
+@media print {
+    body {
+        background-color: #ffffff;
+    }
+    
+    aside, header, nav, button, .no-print {
+        display: none !important;
+    }
+
+    .print-container {
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+        border: none !important;
+    }
+}

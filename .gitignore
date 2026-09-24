@@ -1,0 +1,22 @@
+# Dependencies & IDE settings
+/vendor/
+.idea/
+.vscode/
+.DS_Store
+
+# Environment and sensitive configuration files
+.env
+
+# Uploaded user files, receipts, and property media
+/uploads/properties/*
+/uploads/tenants/*
+/uploads/documents/*
+/uploads/maintenance/*
+!/uploads/properties/.gitkeep
+!/uploads/tenants/.gitkeep
+!/uploads/documents/.gitkeep
+!/uploads/maintenance/.gitkeep
+
+# Logs and temporary files
+*.log
+/logs/
