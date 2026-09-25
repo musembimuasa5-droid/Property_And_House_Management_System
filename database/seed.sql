@@ -1,3 +1,7 @@
+CREATE DATABASE IF NOT EXISTS nairobi_property_db;
+USE nairobi_property_db;
+
+-- (Paste the rest of your schema.sql code below this)
 -- Insert Roles
 INSERT INTO roles (id, name, description) VALUES
 (1, 'Super Admin', 'Full system access across all modules and organizations'),

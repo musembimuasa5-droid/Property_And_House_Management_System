@@ -1,3 +1,7 @@
+CREATE DATABASE IF NOT EXISTS nairobi_property_db;
+USE nairobi_property_db;
+
+-- (Paste the rest of your schema.sql code below this)
 SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS audit_logs;
 DROP TABLE IF EXISTS viewing_requests;
