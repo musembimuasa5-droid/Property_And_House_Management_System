@@ -1,16 +1,3 @@
-# Protect directory browsing
-Options -Indexes
+RewriteEngine On
 
-# Prevent execution of scripts in upload directories
-<Directory "uploads/">
-    php_flag engine off
-</Directory>
-
-# Rewrite Rules
-<IfModule mod_rewrite.c>
-    RewriteEngine On
-    RewriteBase /Nairobi_Property_And_House_Management_SaaS/
-
-    # Redirect root to public index
-    RewriteRule ^$ public/index.php [L]
-</IfModule>
+RewriteRule ^$ public/index.php [L]
