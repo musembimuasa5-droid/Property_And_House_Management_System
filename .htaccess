@@ -1,16 +1,3 @@
-# Prevent directory listing
-Options -Indexes
+RewriteEngine On
 
-<IfModule mod_rewrite.c>
-    RewriteEngine On
-
-    # Project base URL
-    RewriteBase /Property_And_House_Management_System/
-
-    # Send the project root to the public folder
-    RewriteRule ^$ public/index.php [L]
-
-    # Send other requests to the public folder
-    RewriteCond %{REQUEST_URI} !^/Property_And_House_Management_System/public/
-    RewriteRule ^(.*)$ public/$1 [L]
-</IfModule>
+RewriteRule ^$ public/index.php [L]

@@ -33,7 +33,7 @@ A comprehensive, database-driven Property and House Management SaaS application 
 
 6. **Access the Application:**
    Navigate to your browser:
-   `http://localhost/Nairobi_Property_And_House_Management_SaaS/`
+   `http://localhost/Property_And_House_Management_System/`
 
 ---
 
