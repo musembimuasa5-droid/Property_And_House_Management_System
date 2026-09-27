@@ -30,7 +30,7 @@ include __DIR__ . '/../includes/header.php';
         <main class="flex-1 p-6 space-y-6">
             <h1 class="text-2xl font-bold text-gray-900">Payment Records & Receipts</h1>
             <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-                <table class="w-full text-left border-collapse">
+                <div class="overflow-x-auto"><table class="w-full text-left border-collapse">
                     <thead>
                         <tr class="bg-gray-50 text-xs font-semibold text-gray-500 uppercase">
                             <th class="p-4">Receipt #</th>
@@ -55,7 +55,7 @@ include __DIR__ . '/../includes/header.php';
                             <?php endforeach; ?>
                         <?php endif; ?>
                     </tbody>
-                </table>
+                </table></div>
             </div>
         </main>
         <?php include __DIR__ . '/../includes/footer.php'; ?>

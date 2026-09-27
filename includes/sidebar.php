@@ -5,8 +5,8 @@ $role = $currentUser['role_name'] ?? 'Guest';
 <aside id="sidebar" class="bg-secondary text-gray-300 w-64 space-y-6 py-7 px-2 absolute inset-y-0 left-0 transform -translate-x-full lg:relative lg:translate-x-0 transition duration-200 ease-in-out z-20 flex flex-col">
     <!-- Brand Header inside sidebar -->
     <div class="px-4 flex items-center space-x-2 text-white">
-        <i class="fa-solid fa-city text-accent text-2xl"></i>
-        <span class="text-lg font-bold">Nairobi Property</span>
+        <img src="<?php echo BASE_URL; ?>/assets/houselogo.avif" alt="" class="sidebar-brand-logo">
+        <span class="text-lg font-bold"><?php echo e(APP_NAME); ?></span>
     </div>
 
     <!-- Navigation Links based on Role -->

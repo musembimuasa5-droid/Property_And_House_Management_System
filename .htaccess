@@ -1,5 +1,6 @@
 RewriteEngine On
 Options -Indexes
+AddType image/avif .avif
 
 <FilesMatch "^(\.env|\.gitignore|README\.md)$">
     Require all denied

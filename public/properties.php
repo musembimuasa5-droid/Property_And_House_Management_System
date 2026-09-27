@@ -66,6 +66,8 @@ include __DIR__ . '/../includes/navbar.php';
     <div class="max-w-7xl mx-auto px-4 py-8 w-full">
         <h1 class="text-3xl font-bold text-gray-900 mb-6">Available Properties in Nairobi</h1>
 
+        <?php include __DIR__ . '/../includes/property-gallery.php'; ?>
+
         <!-- Search & Filter Form -->
         <form method="GET" class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 mb-8">
             <div>
@@ -115,7 +117,7 @@ include __DIR__ . '/../includes/navbar.php';
                     <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
                         <div class="h-48 bg-gray-200 flex items-center justify-center text-gray-400">
                             <?php $imagePath = trim((string)($prop['property_image'] ?? ''), '/'); $imageFile = $imagePath !== '' ? dirname(__DIR__) . '/' . $imagePath : ''; ?>
-                            <?php if ($imagePath !== '' && is_file($imageFile)): ?><img class="w-full h-full object-cover" src="<?php echo BASE_URL . '/' . e($imagePath); ?>" alt="Exterior of <?php echo e($prop['name']); ?>" loading="lazy"><?php else: ?><div class="building-placeholder" aria-label="Property image not provided"><span aria-hidden="true">⌂</span></div><?php endif; ?>
+                            <?php if ($imagePath !== '' && is_file($imageFile)): ?><img class="w-full h-full object-cover" src="<?php echo BASE_URL . '/' . e($imagePath); ?>" alt="Exterior of <?php echo e($prop['name']); ?>" loading="lazy"><?php else: ?><img class="w-full h-full object-cover" src="<?php echo BASE_URL . '/' . e(sample_property_image($prop['id'])); ?>" alt="Sample home image; actual property photo not provided" loading="lazy"><?php endif; ?>
                         </div>
                         <div class="p-5 flex-1 flex flex-col justify-between">
                             <div>

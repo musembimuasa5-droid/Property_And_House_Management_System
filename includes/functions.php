@@ -34,6 +34,22 @@ function format_currency($amount) {
 }
 
 /**
+ * Return a rotating local sample image for listings without an uploaded photo.
+ * These images are illustrative and should never replace a saved property image.
+ */
+function sample_property_image($property_id) {
+    $images = [
+        'assets/house5.jpg',
+        'assets/house1.jpg',
+        'assets/house2.jpg',
+        'assets/house3.jpg',
+        'assets/house4.jpg',
+    ];
+    $index = max(0, (abs((int)$property_id) - 1) % count($images));
+    return $images[$index];
+}
+
+/**
  * Generate a unique receipt number
  */
 function generate_receipt_number() {

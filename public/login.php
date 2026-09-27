@@ -53,8 +53,8 @@ include __DIR__ . '/../includes/header.php';
 include __DIR__ . '/../includes/navbar.php';
 ?>
 
-<div class="flex-1 flex items-center justify-center px-4 py-12">
-    <div class="max-w-md w-full bg-white rounded-xl shadow-lg p-8 border border-gray-100">
+<div class="auth-page flex-1 flex items-center justify-center px-4 py-12">
+    <div class="auth-card max-w-md w-full bg-white rounded-xl shadow-lg p-8 border border-gray-100">
         <div class="text-center mb-8">
             <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 text-primary mb-3">
                 <i class="fa-solid fa-lock text-xl"></i>

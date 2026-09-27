@@ -56,8 +56,8 @@ include __DIR__ . '/../includes/header.php';
 include __DIR__ . '/../includes/navbar.php';
 ?>
 
-<div class="flex-1 flex items-center justify-center px-4 py-12 bg-gray-50">
-    <div class="max-w-md w-full bg-white rounded-xl shadow-sm p-8 border border-gray-100">
+<div class="auth-page flex-1 flex items-center justify-center px-4 py-12 bg-gray-50">
+    <div class="auth-card max-w-md w-full bg-white rounded-xl shadow-sm p-8 border border-gray-100">
         <h2 class="text-2xl font-bold text-gray-900 mb-1">Tenant Registration</h2>
         <p class="text-sm text-gray-500 mb-6">Create your tenant portal account</p>
 

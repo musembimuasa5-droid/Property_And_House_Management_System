@@ -38,8 +38,8 @@ $propertyTypes = PROPERTY_TYPES;
         <div class="hero-actions"><a class="button button-primary" href="<?php echo BASE_URL; ?>/public/properties.php">Explore available houses <span aria-hidden="true">→</span></a><a class="button button-outline" href="<?php echo BASE_URL; ?>/public/login.php">Property manager login</a></div>
         <p class="hero-note">For renters, landlords and property management teams.</p>
       </div>
-      <div class="hero-art" role="img" aria-label="Illustration of modern Nairobi apartment buildings">
-        <div class="art-sun"></div><div class="art-building art-building-back"><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="art-building art-building-front"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="art-ground"></div><div class="art-caption"><span class="art-caption-mark" aria-hidden="true">⌂</span><span><strong>Room to settle in</strong><small>Explore homes across Nairobi</small></span></div>
+      <div class="hero-art">
+        <img src="<?php echo BASE_URL; ?>/assets/house4.jpg" alt="A row of modern homes in a residential community" fetchpriority="high"><div class="art-caption"><span class="art-caption-mark" aria-hidden="true">⌂</span><span><strong>Room to settle in</strong><small>Explore homes across Nairobi</small></span></div>
       </div>
     </div>
   </section>
@@ -69,7 +69,7 @@ $propertyTypes = PROPERTY_TYPES;
         <article class="property-card">
           <a class="property-image" href="<?php echo BASE_URL; ?>/public/property-details.php?id=<?php echo (int)$property['id']; ?>" aria-label="View <?php echo e($property['name']); ?>">
             <?php $imagePath = trim((string)($property['property_image'] ?? ''), '/'); $imageFile = $imagePath !== '' ? __DIR__ . '/' . $imagePath : ''; ?>
-            <?php if ($imagePath !== '' && is_file($imageFile)): ?><img src="<?php echo BASE_URL . '/' . e($imagePath); ?>" alt="Exterior of <?php echo e($property['name']); ?>" loading="lazy"><?php else: ?><div class="building-placeholder" aria-label="Property image not provided"><span aria-hidden="true">⌂</span></div><?php endif; ?>
+            <?php if ($imagePath !== '' && is_file($imageFile)): ?><img src="<?php echo BASE_URL . '/' . e($imagePath); ?>" alt="Exterior of <?php echo e($property['name']); ?>" loading="lazy"><?php else: ?><img src="<?php echo BASE_URL . '/' . e(sample_property_image($property['id'])); ?>" alt="Sample home image; actual property photo not provided" loading="lazy"><?php endif; ?>
             <span class="availability-tag"><i aria-hidden="true"></i> Available</span>
           </a>
           <div class="property-card-body"><p class="property-type"><?php echo e($property['property_type']); ?></p><h3><a href="<?php echo BASE_URL; ?>/public/property-details.php?id=<?php echo (int)$property['id']; ?>"><?php echo e($property['name']); ?></a></h3><p class="property-location"><span aria-hidden="true">⌖</span> <?php echo e($property['estate'] . ', ' . $property['sub_county']); ?></p>
@@ -79,6 +79,8 @@ $propertyTypes = PROPERTY_TYPES;
         </article>
       <?php endforeach; ?></div><?php endif; ?>
   </div></section>
+
+  <?php include __DIR__ . '/includes/property-gallery.php'; ?>
 
   <section class="service-section" id="services"><div class="site-container"><div class="section-heading"><div><p class="eyebrow">One practical platform</p><h2>Make property work simpler</h2><p>Useful tools for the everyday work of running rental properties.</p></div></div>
     <div class="service-grid"><?php foreach ([['01','Property & unit management','Keep property details, units and availability organised.'],['02','Tenant records','Manage tenant information and tenancy records in one place.'],['03','Rent & payment tracking','Review rent charges, balances and payment history.'],['04','Maintenance requests','Receive tenant reports and follow requests through to completion.'],['05','Bills & utilities','Keep utility readings and tenant charges accessible.'],['06','Property reports','Review occupancy and financial activity from your dashboard.']] as $service): ?><article class="service-card"><span class="service-number"><?php echo e($service[0]); ?></span><h3><?php echo e($service[1]); ?></h3><p><?php echo e($service[2]); ?></p></article><?php endforeach; ?></div>
