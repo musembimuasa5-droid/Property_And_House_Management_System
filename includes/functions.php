@@ -39,12 +39,12 @@ function format_currency($amount) {
  */
 function sample_property_image($property_id) {
     $images = [
-        'assets/house5.jpg',
         'assets/house1.jpg',
+        'assets/house6.jpg',
         'assets/house2.jpg',
         'assets/house3.jpg',
         'assets/house4.jpg',
-    ];
+        'assets/house5.jpg',    ];
     $index = max(0, (abs((int)$property_id) - 1) % count($images));
     return $images[$index];
 }
