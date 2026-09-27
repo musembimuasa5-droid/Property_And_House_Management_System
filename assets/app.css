@@ -272,3 +272,6 @@ header.bg-white.border-b { border-color:#344f70; box-shadow:0 5px 18px rgba(15,2
 @media (prefers-reduced-motion:reduce) {
     *,*::before,*::after { scroll-behavior:auto !important; transition-duration:.01ms !important; }
 }
+
+.dashboard-section { background:var(--surface-soft); border:1px solid var(--border); }
+.dashboard-section .bg-white { min-width:0; }

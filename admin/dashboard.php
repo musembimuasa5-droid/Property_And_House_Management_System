@@ -16,6 +16,10 @@ $stats = [
     'occupied' => $db->query("SELECT COUNT(*) FROM units WHERE status = 'Occupied'")->fetchColumn(),
     'vacant' => $db->query("SELECT COUNT(*) FROM units WHERE status = 'Vacant'")->fetchColumn(),
     'tenants' => $db->query("SELECT COUNT(*) FROM tenants WHERE status = 'Active'")->fetchColumn(),
+    'landlords' => $db->query("SELECT COUNT(*) FROM landlords WHERE status = 'Active'")->fetchColumn(),
+    'caretakers' => $db->query("SELECT COUNT(*) FROM users u JOIN roles r ON r.id=u.role_id WHERE r.name='Caretaker' AND u.status='Active'")->fetchColumn(),
+    'payments' => $db->query("SELECT COUNT(*) FROM payments")->fetchColumn(),
+    'outstanding' => $db->query("SELECT COALESCE(SUM(GREATEST(rc.total_due-COALESCE(pa.paid,0),0)),0) FROM rent_charges rc LEFT JOIN (SELECT rent_charge_id,SUM(allocated_amount) paid FROM payment_allocations GROUP BY rent_charge_id) pa ON pa.rent_charge_id=rc.id WHERE rc.status<>'Paid'")->fetchColumn(),
     'collected' => $db->query("SELECT SUM(amount) FROM payments WHERE YEAR(payment_date) = YEAR(CURRENT_DATE()) AND MONTH(payment_date) = MONTH(CURRENT_DATE())")->fetchColumn() ?: 0,
     'maintenance' => $db->query("SELECT COUNT(*) FROM maintenance_requests WHERE status NOT IN ('Completed', 'Cancelled')")->fetchColumn()
 ];
@@ -53,52 +57,12 @@ include __DIR__ . '/../includes/header.php';
                 </div>
             </div>
 
-            <!-- Stat Cards Grid -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                <div class="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-xs font-medium text-gray-500 uppercase">Total Properties</p>
-                            <h3 class="text-2xl font-bold text-gray-900 mt-1"><?php echo $stats['properties']; ?></h3>
-                        </div>
-                        <div class="p-3 bg-blue-50 text-primary rounded-xl"><i class="fa-solid fa-building text-lg"></i></div>
-                    </div>
-                </div>
-
-                <div class="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-xs font-medium text-gray-500 uppercase">Occupancy Rate</p>
-                            <h3 class="text-2xl font-bold text-gray-900 mt-1">
-                                <?php echo $stats['units'] > 0 ? round(($stats['occupied'] / $stats['units']) * 100) . '%' : '0%'; ?>
-                            </h3>
-                        </div>
-                        <div class="p-3 bg-green-50 text-success rounded-xl"><i class="fa-solid fa-door-open text-lg"></i></div>
-                    </div>
-                    <p class="text-xs text-gray-400 mt-2"><?php echo $stats['vacant']; ?> vacant units available</p>
-                </div>
-
-                <div class="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-xs font-medium text-gray-500 uppercase">Monthly Collections</p>
-                            <h3 class="text-xl font-bold text-gray-900 mt-1"><?php echo format_currency($stats['collected']); ?></h3>
-                        </div>
-                        <div class="p-3 bg-indigo-50 text-indigo-600 rounded-xl"><i class="fa-solid fa-money-bill-trend-up text-lg"></i></div>
-                    </div>
-                </div>
-
-                <div class="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-xs font-medium text-gray-500 uppercase">Open Maintenance</p>
-                            <h3 class="text-2xl font-bold text-gray-900 mt-1"><?php echo $stats['maintenance']; ?></h3>
-                        </div>
-                        <div class="p-3 bg-yellow-50 text-warning rounded-xl"><i class="fa-solid fa-screwdriver-wrench text-lg"></i></div>
-                    </div>
-                </div>
+            <!-- System-wide live statistics -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
+                <?php foreach ([['Properties',$stats['properties'],'fa-building'],['Total Units',$stats['units'],'fa-door-open'],['Occupied Units',$stats['occupied'],'fa-key'],['Vacant Units',$stats['vacant'],'fa-house-circle-check'],['Active Landlords',$stats['landlords'],'fa-user-tie'],['Active Caretakers',$stats['caretakers'],'fa-person-circle-check'],['Active Tenants',$stats['tenants'],'fa-users'],['Payments Recorded',$stats['payments'],'fa-receipt'],['Outstanding Rent',format_currency($stats['outstanding']),'fa-file-invoice-dollar'],['Monthly Collections',format_currency($stats['collected']),'fa-money-bill-wave'],['Open Maintenance',$stats['maintenance'],'fa-screwdriver-wrench']] as $card): ?>
+                    <article class="bg-white p-5 rounded-xl border border-gray-100 shadow-sm"><div class="flex items-center justify-between"><div><p class="text-xs font-medium text-gray-500 uppercase"><?php echo e($card[0]); ?></p><h2 class="text-xl font-bold text-gray-900 mt-2"><?php echo e((string)$card[1]); ?></h2></div><span class="p-3 rounded-xl bg-blue-50 text-primary"><i class="fa-solid <?php echo e($card[2]); ?>"></i></span></div></article>
+                <?php endforeach; ?>
             </div>
-
             <!-- Recent Transactions Table -->
             <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
                 <div class="p-5 border-b border-gray-100 flex items-center justify-between">

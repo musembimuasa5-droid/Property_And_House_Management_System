@@ -4,7 +4,7 @@ require_once __DIR__ . '/functions.php';
 $currentUser = getCurrentUser();
 $isPublicPage = strpos($_SERVER['SCRIPT_NAME'] ?? '', '/public/') !== false || basename($_SERVER['SCRIPT_NAME'] ?? '') === 'index.php';
 $role = $currentUser['role_name'] ?? '';
-$dashboardUrl = $role === 'Tenant' ? BASE_URL . '/tenant/dashboard.php' : (in_array($role, ['Super Admin', 'Property Manager', 'Accountant'], true) ? BASE_URL . '/admin/dashboard.php' : '');
+$dashboardUrl = $currentUser ? BASE_URL . '/' . dashboardPathForRole($role) : '';
 ?>
 <a class="skip-link" href="#main-content">Skip to content</a>
 <?php if ($isPublicPage): ?>

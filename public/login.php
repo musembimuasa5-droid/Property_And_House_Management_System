@@ -34,14 +34,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $update = $db->prepare("UPDATE users SET last_login = NOW() WHERE id = ?");
             $update->execute([$user['id']]);
 
-            // Redirect based on role
-            if ($user['role_name'] === 'Tenant') {
-                redirect('tenant/dashboard.php');
-            } elseif (in_array($user['role_name'], ['Super Admin', 'Property Manager', 'Accountant'], true)) {
-                redirect('admin/dashboard.php');
-            } else {
-                redirect('public/index.php?error=role_portal_unavailable');
-            }
+            redirectToRoleDashboard($user['role_name']);
+
         } else {
             $error = 'Invalid email address or password.';
         }

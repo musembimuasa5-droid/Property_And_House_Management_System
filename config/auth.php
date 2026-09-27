@@ -21,6 +21,18 @@ function getCurrentUser() {
     ];
 }
 
+/** Return the existing portal entry point for a user's database role. */
+function dashboardPathForRole($role_name) {
+    if ($role_name === 'Tenant') return 'tenant/dashboard.php';
+    if ($role_name === 'Landlord') return 'landlord/dashboard.php';
+    if ($role_name === 'Caretaker') return 'caretaker/dashboard.php';
+    if (in_array($role_name, ['Super Admin', 'Property Manager', 'Accountant'], true)) return 'admin/dashboard.php';
+    return 'public/index.php?error=role_portal_unavailable';
+}
+
+function redirectToRoleDashboard($role_name) {
+    redirect(dashboardPathForRole($role_name));
+}
 function requireLogin() {
     if (!isLoggedIn()) {
         header("Location: " . BASE_URL . "/public/login.php?error=unauthorized");

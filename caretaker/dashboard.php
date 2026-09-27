@@ -1,0 +1,21 @@
+<?php
+require_once __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../config/auth.php';
+require_once __DIR__ . '/../includes/functions.php';
+requireRole('Caretaker');
+$db=db(); $user=getCurrentUser();
+$base="FROM maintenance_requests mr JOIN properties p ON p.id=mr.property_id JOIN units u ON u.id=mr.unit_id JOIN tenants t ON t.id=mr.tenant_id WHERE mr.assigned_staff = ?";
+$count=$db->prepare("SELECT COUNT(*) requests, COUNT(DISTINCT mr.property_id) properties, COUNT(DISTINCT mr.unit_id) units, COUNT(DISTINCT CASE WHEN u.status='Occupied' THEN u.id END) occupied, COUNT(DISTINCT CASE WHEN u.status='Vacant' THEN u.id END) vacant, SUM(CASE WHEN mr.status NOT IN ('Completed','Cancelled') THEN 1 ELSE 0 END) open_count, SUM(CASE WHEN mr.priority='Emergency' AND mr.status NOT IN ('Completed','Cancelled') THEN 1 ELSE 0 END) urgent $base");
+$count->execute([$user['id']]); $stats=$count->fetch();
+$recent=$db->prepare("SELECT mr.id,mr.category,mr.description,mr.priority,mr.status,mr.created_at,p.name property_name,u.unit_number,t.full_name tenant_name $base ORDER BY mr.created_at DESC LIMIT 8");
+$recent->execute([$user['id']]); $requests=$recent->fetchAll();
+$page_title='Caretaker Dashboard'; include __DIR__ . '/../includes/header.php';
+?>
+<div class="flex h-screen bg-gray-50 overflow-hidden">
+<?php include __DIR__ . '/../includes/sidebar.php'; ?><div class="flex-1 flex flex-col overflow-y-auto"><?php include __DIR__ . '/../includes/navbar.php'; ?>
+<main id="main-content" class="flex-1 p-6 space-y-6"><div><p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Caretaker workspace</p><h1 class="text-2xl font-bold text-gray-900">Welcome, <?php echo e($user['full_name']); ?></h1><p class="text-sm text-gray-500">Requests and property details linked to work assigned to you.</p></div>
+<div class="notice notice-warning"><strong>Assignment scope:</strong> This account has access to maintenance requests explicitly assigned to it. Property and unit assignments are not represented in the current database.</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5"><?php foreach ([['Properties with Assigned Work',$stats['properties'],'fa-building'],['Units in Assigned Requests',$stats['units'],'fa-door-open'],['Open Requests',$stats['open_count'],'fa-screwdriver-wrench'],['Urgent Issues',$stats['urgent'],'fa-triangle-exclamation']] as $card): ?><article class="bg-white p-5 rounded-xl border border-gray-100 shadow-sm"><div class="flex items-center justify-between"><div><p class="text-xs font-medium text-gray-500 uppercase"><?php echo e($card[0]); ?></p><h2 class="text-2xl font-bold text-gray-900 mt-2"><?php echo e((string)$card[1]); ?></h2></div><span class="p-3 rounded-xl bg-blue-50 text-primary"><i class="fa-solid <?php echo e($card[2]); ?>"></i></span></div></article><?php endforeach; ?></div>
+<section id="assigned-requests" class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden"><div class="p-5 border-b border-gray-100"><h2 class="font-bold">Recent assigned requests</h2></div><div class="overflow-x-auto"><table class="w-full text-left"><thead><tr><th class="p-4">Issue</th><th class="p-4">Property / Unit</th><th class="p-4">Tenant</th><th class="p-4">Priority</th><th class="p-4">Status</th><th class="p-4">Reported</th></tr></thead><tbody><?php if (!$requests): ?><tr><td colspan="6" class="p-5 text-center text-gray-500">No maintenance requests have been assigned to you.</td></tr><?php endif; ?><?php foreach ($requests as $request): ?><tr class="border-t"><td class="p-4"><strong><?php echo e($request['category']); ?></strong><div class="text-xs text-gray-500"><?php echo e($request['description']); ?></div></td><td class="p-4"><?php echo e($request['property_name'].' / '.$request['unit_number']); ?></td><td class="p-4"><?php echo e($request['tenant_name']); ?></td><td class="p-4"><?php echo render_status_badge($request['priority']); ?></td><td class="p-4"><?php echo render_status_badge($request['status']); ?></td><td class="p-4"><?php echo e($request['created_at']); ?></td></tr><?php endforeach; ?></tbody></table></div></section>
+</main><?php include __DIR__ . '/../includes/footer.php'; ?></div></div>
