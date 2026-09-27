@@ -6,6 +6,10 @@ require_once __DIR__ . '/../config/config.php';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="<?php echo e($page_description ?? 'Property and house management for Nairobi.'); ?>">
+    <meta property="og:title" content="<?php echo e($page_title ?? APP_NAME); ?>">
+    <meta property="og:description" content="<?php echo e($page_description ?? 'Property and house management for Nairobi.'); ?>">
+    <meta property="og:type" content="website">
     <title><?php echo isset($page_title) ? $page_title . ' - ' . APP_NAME : APP_NAME; ?></title>
     <link rel="stylesheet" href="<?php echo BASE_URL; ?>/assets/app.css">
     <!-- Tailwind CSS CDN -->

@@ -44,8 +44,12 @@ if (!empty($property_type)) {
     $params[] = $property_type;
 }
 if ($bedrooms !== '' && ctype_digit((string)$bedrooms)) {
-    $query .= " AND u.bedrooms >= ?";
-    $params[] = (int)$bedrooms;
+    if ((int)$bedrooms === 0) {
+        $query .= " AND u.house_type IN ('Bedsitter', 'Studio')";
+    } else {
+        $query .= " AND u.bedrooms >= ?";
+        $params[] = (int)$bedrooms;
+    }
 }
 
 $query .= " GROUP BY p.id, l.estate, l.sub_county";
@@ -110,7 +114,8 @@ include __DIR__ . '/../includes/navbar.php';
                 <?php foreach ($properties as $prop): ?>
                     <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
                         <div class="h-48 bg-gray-200 flex items-center justify-center text-gray-400">
-                            <?php if (!empty($prop['property_image'])): ?><img class="w-full h-full object-cover" src="<?php echo BASE_URL . '/' . e(ltrim($prop['property_image'], '/')); ?>" alt="<?php echo e($prop['name']); ?>"><?php else: ?><i class="fa-solid fa-building text-4xl" aria-hidden="true"></i><?php endif; ?>
+                            <?php $imagePath = trim((string)($prop['property_image'] ?? ''), '/'); $imageFile = $imagePath !== '' ? dirname(__DIR__) . '/' . $imagePath : ''; ?>
+                            <?php if ($imagePath !== '' && is_file($imageFile)): ?><img class="w-full h-full object-cover" src="<?php echo BASE_URL . '/' . e($imagePath); ?>" alt="Exterior of <?php echo e($prop['name']); ?>" loading="lazy"><?php else: ?><div class="building-placeholder" aria-label="Property image not provided"><span aria-hidden="true">⌂</span></div><?php endif; ?>
                         </div>
                         <div class="p-5 flex-1 flex flex-col justify-between">
                             <div>
