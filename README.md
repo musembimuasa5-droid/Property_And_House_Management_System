@@ -1,43 +1,28 @@
-# Nairobi Property & House Management SaaS
+# Nairobi Property & House Management System
 
-A comprehensive, database-driven Property and House Management SaaS application tailored for the Kenyan real estate market (covering Nairobi estates like Kasarani, Roysambu, Westlands, Kilimani, and Lang'ata). Built with native PHP (PDO), Tailwind CSS, MySQL (InnoDB), and fully optimized for local XAMPP environments.
+An existing PHP/PDO and MySQL application for browsing Nairobi rental properties and supporting tenant workflows. The current checkout contains a public property directory, tenant portal, one management dashboard, and shared authentication/database components. Several management modules referenced by the original navigation are not present yet.
 
----
+## Local setup
 
-## Features
+1. Place the project at `C:\xampp\htdocs\Property_And_House_Management_System` and start Apache and MySQL in XAMPP.
+2. Create the `nairobi_property_db` database in phpMyAdmin.
+3. Import `database/schema.sql`, then `database/seed.sql`. The schema no longer drops existing tables; seed inserts use `INSERT IGNORE` to avoid duplicating the provided sample IDs.
+4. Copy `.env.example` to `.env` and configure the database values. The default local connection uses `localhost:3306`, database `nairobi_property_db`, user `root`, and an empty password.
+5. Visit `http://localhost/Property_And_House_Management_System/`.
 
-- **Multi-Role Access Control (RBAC):** Super Admin, Property Manager, Accountant, Caretaker, and Tenant portals.
-- **Property & Unit Management:** Track multi-story buildings, apartments, bedsitters, commercial shops, and vacancy statuses.
-- **Tenant & Lease Tracking:** Manage lease agreements, deposits, monthly billings, and security details.
-- **Automated Financials & M-Pesa Integration:** Record rent payments, utility bills (water and electricity), and generate unique printable receipts.
-- **Maintenance & Complaints Desk:** Tenants can log plumbing, electrical, or structural issues with priority tags for management review.
+## Configuration
 
----
+The app reads `.env` when present. Set `APP_ENV=production` and `APP_DEBUG=false` for production use. Protect the `.env` file and replace development database credentials before deployment. `APP_URL` defaults to the XAMPP URL above.
 
-## Installation & Setup Guide
+## Seed accounts
 
-1. **Clone or Place Project:**
-   Move the `Nairobi_Property_And_House_Management_SaaS` folder into your XAMPP `htdocs` directory (`C:\xampp\htdocs\` on Windows).
+Seeded user rows use a bundled development bcrypt hash. The original seed comment and README password did not match reliably, so do not use these accounts outside a local development database. For a fresh development database, verify/reset the account password with PHP `password_hash()` and keep credentials local.
 
-2. **Start Apache & MySQL:**
-   Open your XAMPP Control Panel and start **Apache** and **MySQL**.
+## Current feature scope
 
-3. **Create Database:**
-   Open phpMyAdmin (`http://localhost/phpmyadmin`) and create a new database named `nairobi_property_db`.
+- Public property search and property viewing requests.
+- Tenant account registration, portal, payment history, rent charges, utility readings, maintenance, complaints, profile, lease list, and notices.
+- Management dashboard metrics and payment recording API.
+- M-Pesa/Daraja is not integrated; payment methods are recorded manually.
 
-4. **Import Schema & Seed Data:**
-   Import `database/schema.sql` followed by `database/seed.sql` into your newly created database.
-
-5. **Configure Environment:**
-   Copy `.env.example` to `.env` and update your database credentials if different from the default XAMPP settings (`root` with no password).
-
-6. **Access the Application:**
-   Navigate to your browser:
-   `http://localhost/Nairobi_Property_And_House_Management_SaaS/`
-
----
-
-## Default Login Credentials (from Seed Data)
-
-- **Super Admin:** `admin@nairobiproperty.co.ke` / `Password123`
-- **Tenant Portal:** `john.kamau@gmail.com` / `Password123`
+The `database/schema.sql` file defines the database structure. Existing databases require a reviewed migration before schema changes; importing the schema will not alter their current tables.

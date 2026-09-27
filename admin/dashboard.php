@@ -11,21 +11,21 @@ $db = db();
 
 // Fetch live database metrics
 $stats = [
-    'properties' => $db->query("SELECT COUNT(*) FROM properties")->fetchColumn(),
+    'properties' => $db->query("SELECT COUNT(*) FROM properties WHERE status = 'Active'")->fetchColumn(),
     'units' => $db->query("SELECT COUNT(*) FROM units")->fetchColumn(),
     'occupied' => $db->query("SELECT COUNT(*) FROM units WHERE status = 'Occupied'")->fetchColumn(),
     'vacant' => $db->query("SELECT COUNT(*) FROM units WHERE status = 'Vacant'")->fetchColumn(),
     'tenants' => $db->query("SELECT COUNT(*) FROM tenants WHERE status = 'Active'")->fetchColumn(),
-    'collected' => $db->query("SELECT SUM(amount) FROM payments WHERE MONTH(payment_date) = MONTH(CURRENT_DATE())")->fetchColumn() ?: 0,
+    'collected' => $db->query("SELECT SUM(amount) FROM payments WHERE YEAR(payment_date) = YEAR(CURRENT_DATE()) AND MONTH(payment_date) = MONTH(CURRENT_DATE())")->fetchColumn() ?: 0,
     'maintenance' => $db->query("SELECT COUNT(*) FROM maintenance_requests WHERE status NOT IN ('Completed', 'Cancelled')")->fetchColumn()
 ];
 
 // Fetch recent payments
 $recent_payments = $db->query("
-    p.*, t.full_name as tenant_name, u.unit_number 
-    FROM payments p 
-    JOIN tenants t ON p.tenant_id = t.id 
-    JOIN units u ON p.unit_id = u.id 
+    SELECT p.*, t.full_name as tenant_name, u.unit_number
+    FROM payments p
+    JOIN tenants t ON p.tenant_id = t.id
+    JOIN units u ON p.unit_id = u.id
     ORDER BY p.payment_date DESC LIMIT 5
 ")->fetchAll();
 
@@ -47,8 +47,8 @@ include __DIR__ . '/../includes/header.php';
                     <p class="text-sm text-gray-500">Real-time property management statistics for Nairobi portfolios.</p>
                 </div>
                 <div class="flex items-center space-x-3">
-                    <a href="<?php echo BASE_URL; ?>/admin/properties/" class="bg-primary hover:bg-blue-800 text-white px-4 py-2 rounded-lg text-sm font-semibold transition shadow-sm">
-                        <i class="fa-solid fa-plus mr-1"></i> Add Property
+                    <a href="<?php echo BASE_URL; ?>/public/properties.php" class="bg-primary hover:bg-blue-800 text-white px-4 py-2 rounded-lg text-sm font-semibold transition shadow-sm">
+                        <i class="fa-solid fa-building mr-1"></i> Browse Properties
                     </a>
                 </div>
             </div>
@@ -103,7 +103,6 @@ include __DIR__ . '/../includes/header.php';
             <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
                 <div class="p-5 border-b border-gray-100 flex items-center justify-between">
                     <h3 class="font-bold text-gray-900">Recent Rent Payments</h3>
-                    <a href="<?php echo BASE_URL; ?>/admin/payments/" class="text-sm text-primary font-medium hover:underline">View All</a>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-collapse">

@@ -5,6 +5,18 @@
 // Global Configuration
 // =====================================================
 
+// Load optional local settings without adding a runtime package.
+$environmentFile = dirname(__DIR__) . '/.env';
+if (is_readable($environmentFile)) {
+    foreach (file($environmentFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $environmentLine) {
+        $environmentLine = trim($environmentLine);
+        if ($environmentLine === '' || $environmentLine[0] === '#' || strpos($environmentLine, '=') === false) continue;
+        [$environmentKey, $environmentValue] = explode('=', $environmentLine, 2);
+        $environmentKey = trim($environmentKey);
+        $environmentValue = trim(trim($environmentValue), "\"'");
+        if (getenv($environmentKey) === false) putenv($environmentKey . '=' . $environmentValue);
+    }
+}
 // Start session
 if (session_status() === PHP_SESSION_NONE) {
     session_set_cookie_params([
@@ -24,11 +36,11 @@ if (session_status() === PHP_SESSION_NONE) {
 // APPLICATION SETTINGS
 // =====================================================
 
-define('APP_NAME', 'Nairobi Property Manager');
+define('APP_NAME', getenv('APP_NAME') ?: 'Nairobi Property Manager');
 
-define('APP_ENV', 'development');
+define('APP_ENV', getenv('APP_ENV') ?: 'development');
 
-define('APP_DEBUG', true);
+define('APP_DEBUG', filter_var(getenv('APP_DEBUG') === false ? (APP_ENV !== 'production') : getenv('APP_DEBUG'), FILTER_VALIDATE_BOOLEAN));
 
 
 // =====================================================
@@ -37,7 +49,7 @@ define('APP_DEBUG', true);
 
 define(
     'BASE_URL',
-    'http://localhost/Property_And_House_Management_System'
+    rtrim(getenv('APP_URL') ?: 'http://localhost/Property_And_House_Management_System', '/')
 );
 
 

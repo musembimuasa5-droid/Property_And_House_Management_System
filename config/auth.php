@@ -35,7 +35,7 @@ function requireRole($allowed_roles) {
     // Allow Super Admin (role_id 1) access everywhere
     if ($user['role_id'] == 1) return;
 
-    if (!in_array($user['role_name'], (array)$allowed_roles)) {
+    if (!in_array($user['role_name'], (array)$allowed_roles, true)) {
         header("Location: " . BASE_URL . "/public/index.php?error=forbidden");
         exit();
     }

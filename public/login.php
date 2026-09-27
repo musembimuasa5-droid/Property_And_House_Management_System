@@ -6,10 +6,13 @@ require_once __DIR__ . '/../includes/functions.php';
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!csrf_validate()) $error = 'Your session expired. Please submit the form again.';
     $email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
 
-    if (empty($email) || empty($password)) {
+    if ($error) {
+        // Do not authenticate a form with a missing or invalid CSRF token.
+    } elseif (empty($email) || empty($password)) {
         $error = 'Please enter both email and password.';
     } else {
         $db = db();
@@ -34,8 +37,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Redirect based on role
             if ($user['role_name'] === 'Tenant') {
                 redirect('tenant/dashboard.php');
-            } else {
+            } elseif (in_array($user['role_name'], ['Super Admin', 'Property Manager', 'Accountant'], true)) {
                 redirect('admin/dashboard.php');
+            } else {
+                redirect('public/index.php?error=role_portal_unavailable');
             }
         } else {
             $error = 'Invalid email address or password.';
@@ -45,6 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $page_title = 'Login';
 include __DIR__ . '/../includes/header.php';
+include __DIR__ . '/../includes/navbar.php';
 ?>
 
 <div class="flex-1 flex items-center justify-center px-4 py-12">
@@ -64,6 +70,7 @@ include __DIR__ . '/../includes/header.php';
         <?php endif; ?>
 
         <form method="POST" action="" class="space-y-5">
+            <?php echo csrf_field(); ?>
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
                 <input type="email" name="email" required class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition" placeholder="admin@nairobiproperty.co.ke">

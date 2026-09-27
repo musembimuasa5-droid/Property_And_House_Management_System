@@ -16,6 +16,10 @@
 !/uploads/tenants/.gitkeep
 !/uploads/documents/.gitkeep
 !/uploads/maintenance/.gitkeep
+!/uploads/properties/.htaccess
+!/uploads/tenants/.htaccess
+!/uploads/documents/.htaccess
+!/uploads/maintenance/.htaccess
 
 # Logs and temporary files
 *.log

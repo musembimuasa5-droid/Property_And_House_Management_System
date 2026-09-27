@@ -6,8 +6,11 @@ require_once __DIR__ . '/../includes/functions.php';
 
 requireRole('Tenant');
 $db = db();
+$user = getCurrentUser();
 
-$notices = $db->query("SELECT * FROM notifications ORDER BY created_at DESC LIMIT 10")->fetchAll();
+$stmt = $db->prepare("SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 10");
+$stmt->execute([$user['id']]);
+$notices = $stmt->fetchAll();
 
 $page_title = 'Property Notices';
 include __DIR__ . '/../includes/header.php';

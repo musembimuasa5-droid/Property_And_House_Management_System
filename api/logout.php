@@ -1,5 +1,11 @@
 <?php
-require_once __DIR__ . '/../../config/config.php';
+require_once __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/../includes/functions.php';
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !csrf_validate()) {
+    http_response_code(405);
+    exit('Invalid request.');
+}
 
 // Clear session data
 $_SESSION = [];

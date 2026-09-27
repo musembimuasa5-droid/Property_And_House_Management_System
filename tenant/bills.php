@@ -14,7 +14,7 @@ $tenant = $tenant_stmt->fetch();
 
 $bills = [];
 if ($tenant) {
-    $stmt = $db->prepare("SELECT * FROM utility_bills WHERE tenant_id = ? ORDER BY billing_month DESC");
+    $stmt = $db->prepare("SELECT r.*, ty.name AS utility_type FROM utility_readings r JOIN utility_types ty ON ty.id = r.utility_type_id JOIN leases l ON l.unit_id = r.unit_id WHERE l.tenant_id = ? ORDER BY r.billing_period DESC");
     $stmt->execute([$tenant['id']]);
     $bills = $stmt->fetchAll();
 }
@@ -46,11 +46,11 @@ include __DIR__ . '/../includes/header.php';
                         <?php else: ?>
                             <?php foreach ($bills as $b): ?>
                                 <tr class="hover:bg-gray-50">
-                                    <td class="p-4 font-semibold text-gray-900"><?php echo e($b['billing_month']); ?></td>
+                                    <td class="p-4 font-semibold text-gray-900"><?php echo e($b['billing_period']); ?></td>
                                     <td class="p-4"><?php echo e($b['utility_type']); ?></td>
                                     <td class="p-4"><?php echo e($b['previous_reading'] . ' - ' . $b['current_reading']); ?></td>
                                     <td class="p-4 font-bold text-primary"><?php echo format_currency($b['total_amount']); ?></td>
-                                    <td class="p-4"><?php echo render_status_badge($b['status']); ?></td>
+                                    <td class="p-4"><?php echo render_status_badge('Recorded'); ?></td>
                                 </tr>
                             <?php endforeach; ?>
                         <?php endif; ?>

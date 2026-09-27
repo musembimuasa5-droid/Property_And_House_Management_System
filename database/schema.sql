@@ -1,34 +1,10 @@
 CREATE DATABASE IF NOT EXISTS nairobi_property_db;
 USE nairobi_property_db;
 
--- (Paste the rest of your schema.sql code below this)
-SET FOREIGN_KEY_CHECKS = 0;
-DROP TABLE IF EXISTS audit_logs;
-DROP TABLE IF EXISTS viewing_requests;
-DROP TABLE IF EXISTS property_images;
-DROP TABLE IF EXISTS documents;
-DROP TABLE IF EXISTS expenses;
-DROP TABLE IF EXISTS notifications;
-DROP TABLE IF EXISTS complaints;
-DROP TABLE IF EXISTS maintenance_requests;
-DROP TABLE IF EXISTS utility_bills;
-DROP TABLE IF EXISTS utility_readings;
-DROP TABLE IF EXISTS utility_types;
-DROP TABLE IF EXISTS payment_allocations;
-DROP TABLE IF EXISTS payments;
-DROP TABLE IF EXISTS rent_charges;
-DROP TABLE IF EXISTS leases;
-DROP TABLE IF EXISTS tenants;
-DROP TABLE IF EXISTS units;
-DROP TABLE IF EXISTS properties;
-DROP TABLE IF EXISTS landlords;
-DROP TABLE IF EXISTS locations;
-DROP TABLE IF EXISTS users;
-DROP TABLE IF EXISTS roles;
-SET FOREIGN_KEY_CHECKS = 1;
+-- Safe to re-run: existing tables and application data are preserved.
 
 -- 1. Roles Table
-CREATE TABLE roles (
+CREATE TABLE IF NOT EXISTS roles (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(50) NOT NULL UNIQUE,
     description VARCHAR(255),
@@ -36,7 +12,7 @@ CREATE TABLE roles (
 ) ENGINE=InnoDB;
 
 -- 2. Users Table
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     role_id INT NOT NULL,
     full_name VARCHAR(100) NOT NULL,
@@ -51,7 +27,7 @@ CREATE TABLE users (
 ) ENGINE=InnoDB;
 
 -- 3. Locations Table (Nairobi Estates / Sub-counties)
-CREATE TABLE locations (
+CREATE TABLE IF NOT EXISTS locations (
     id INT AUTO_INCREMENT PRIMARY KEY,
     county VARCHAR(100) DEFAULT 'Nairobi',
     sub_county VARCHAR(100) NOT NULL,
@@ -60,7 +36,7 @@ CREATE TABLE locations (
 ) ENGINE=InnoDB;
 
 -- 4. Landlords Table
-CREATE TABLE landlords (
+CREATE TABLE IF NOT EXISTS landlords (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NULL,
     full_name VARCHAR(100) NOT NULL,
@@ -77,7 +53,7 @@ CREATE TABLE landlords (
 ) ENGINE=InnoDB;
 
 -- 5. Properties Table
-CREATE TABLE properties (
+CREATE TABLE IF NOT EXISTS properties (
     id INT AUTO_INCREMENT PRIMARY KEY,
     landlord_id INT NOT NULL,
     name VARCHAR(150) NOT NULL,
@@ -99,7 +75,7 @@ CREATE TABLE properties (
 ) ENGINE=InnoDB;
 
 -- 6. Units Table
-CREATE TABLE units (
+CREATE TABLE IF NOT EXISTS units (
     id INT AUTO_INCREMENT PRIMARY KEY,
     property_id INT NOT NULL,
     unit_number VARCHAR(50) NOT NULL,
@@ -120,7 +96,7 @@ CREATE TABLE units (
 ) ENGINE=InnoDB;
 
 -- 7. Tenants Table
-CREATE TABLE tenants (
+CREATE TABLE IF NOT EXISTS tenants (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NULL,
     full_name VARCHAR(100) NOT NULL,
@@ -141,7 +117,7 @@ CREATE TABLE tenants (
 ) ENGINE=InnoDB;
 
 -- 8. Leases Table
-CREATE TABLE leases (
+CREATE TABLE IF NOT EXISTS leases (
     id INT AUTO_INCREMENT PRIMARY KEY,
     tenant_id INT NOT NULL,
     property_id INT NOT NULL,
@@ -162,7 +138,7 @@ CREATE TABLE leases (
 ) ENGINE=InnoDB;
 
 -- 9. Rent Charges Table
-CREATE TABLE rent_charges (
+CREATE TABLE IF NOT EXISTS rent_charges (
     id INT AUTO_INCREMENT PRIMARY KEY,
     lease_id INT NOT NULL,
     tenant_id INT NOT NULL,
@@ -182,7 +158,7 @@ CREATE TABLE rent_charges (
 ) ENGINE=InnoDB;
 
 -- 10. Payments Table
-CREATE TABLE payments (
+CREATE TABLE IF NOT EXISTS payments (
     id INT AUTO_INCREMENT PRIMARY KEY,
     receipt_number VARCHAR(50) NOT NULL UNIQUE,
     tenant_id INT NOT NULL,
@@ -205,7 +181,7 @@ CREATE TABLE payments (
 ) ENGINE=InnoDB;
 
 -- 11. Payment Allocations (Supports partial payment tracking across specific charges)
-CREATE TABLE payment_allocations (
+CREATE TABLE IF NOT EXISTS payment_allocations (
     id INT AUTO_INCREMENT PRIMARY KEY,
     payment_id INT NOT NULL,
     rent_charge_id INT NOT NULL,
@@ -216,7 +192,7 @@ CREATE TABLE payment_allocations (
 ) ENGINE=InnoDB;
 
 -- 12. Utility Types Table
-CREATE TABLE utility_types (
+CREATE TABLE IF NOT EXISTS utility_types (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(50) NOT NULL,
     unit_of_measure VARCHAR(20) DEFAULT 'Units',
@@ -225,7 +201,7 @@ CREATE TABLE utility_types (
 ) ENGINE=InnoDB;
 
 -- 13. Utility Readings Table
-CREATE TABLE utility_readings (
+CREATE TABLE IF NOT EXISTS utility_readings (
     id INT AUTO_INCREMENT PRIMARY KEY,
     unit_id INT NOT NULL,
     utility_type_id INT NOT NULL,
@@ -243,7 +219,7 @@ CREATE TABLE utility_readings (
 ) ENGINE=InnoDB;
 
 -- 14. Maintenance Requests Table
-CREATE TABLE maintenance_requests (
+CREATE TABLE IF NOT EXISTS maintenance_requests (
     id INT AUTO_INCREMENT PRIMARY KEY,
     tenant_id INT NOT NULL,
     property_id INT NOT NULL,
@@ -265,7 +241,7 @@ CREATE TABLE maintenance_requests (
 ) ENGINE=InnoDB;
 
 -- 15. Complaints Table
-CREATE TABLE complaints (
+CREATE TABLE IF NOT EXISTS complaints (
     id INT AUTO_INCREMENT PRIMARY KEY,
     tenant_id INT NOT NULL,
     property_id INT NOT NULL,
@@ -283,7 +259,7 @@ CREATE TABLE complaints (
 ) ENGINE=InnoDB;
 
 -- 16. Expenses Table
-CREATE TABLE expenses (
+CREATE TABLE IF NOT EXISTS expenses (
     id INT AUTO_INCREMENT PRIMARY KEY,
     property_id INT NOT NULL,
     category ENUM('Maintenance', 'Security', 'Utilities', 'Cleaning', 'Staff', 'Repairs', 'Management', 'Other') NOT NULL,
@@ -299,7 +275,7 @@ CREATE TABLE expenses (
 ) ENGINE=InnoDB;
 
 -- 17. Notifications Table
-CREATE TABLE notifications (
+CREATE TABLE IF NOT EXISTS notifications (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
     title VARCHAR(150) NOT NULL,
@@ -310,7 +286,7 @@ CREATE TABLE notifications (
 ) ENGINE=InnoDB;
 
 -- 18. Viewing Requests Table
-CREATE TABLE viewing_requests (
+CREATE TABLE IF NOT EXISTS viewing_requests (
     id INT AUTO_INCREMENT PRIMARY KEY,
     property_id INT NOT NULL,
     unit_id INT NULL,
@@ -327,7 +303,7 @@ CREATE TABLE viewing_requests (
 ) ENGINE=InnoDB;
 
 -- 19. Documents Table
-CREATE TABLE documents (
+CREATE TABLE IF NOT EXISTS documents (
     id INT AUTO_INCREMENT PRIMARY KEY,
     property_id INT NULL,
     tenant_id INT NULL,
@@ -342,7 +318,7 @@ CREATE TABLE documents (
 ) ENGINE=InnoDB;
 
 -- 20. Audit Logs Table
-CREATE TABLE audit_logs (
+CREATE TABLE IF NOT EXISTS audit_logs (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NULL,
     action VARCHAR(100) NOT NULL,

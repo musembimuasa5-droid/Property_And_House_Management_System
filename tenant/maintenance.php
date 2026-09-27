@@ -16,16 +16,23 @@ $error = '';
 $success = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $tenant) {
+    if (!csrf_validate()) { $error = 'Your session expired. Please reload the page and try again.'; }
     $category = $_POST['category'] ?? 'Plumbing';
     $description = trim($_POST['description'] ?? '');
     $priority = $_POST['priority'] ?? 'Medium';
 
-    if (!empty($description)) {
-        $stmt = $db->prepare("INSERT INTO maintenance_requests (tenant_id, property_id, unit_id, category, description, priority) VALUES (?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$tenant['id'], $tenant['property_id'], $tenant['unit_id'], $category, $description, $priority]);
-        $success = 'Maintenance request submitted successfully.';
-    } else {
-        $error = 'Please provide a description of the issue.';
+    if (!$error) {
+        if (!in_array($category, ['Plumbing','Electrical','Water','Security','Structural','Appliance','Cleaning','Other'], true)) {
+            $error = 'Select a valid maintenance category.';
+        } elseif (!in_array($priority, ['Low','Medium','High','Emergency'], true)) {
+            $error = 'Select a valid priority.';
+        } elseif ($description === '') {
+            $error = 'Please provide a description of the issue.';
+        } else {
+            $stmt = $db->prepare("INSERT INTO maintenance_requests (tenant_id, property_id, unit_id, category, description, priority) VALUES (?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$tenant['id'], $tenant['property_id'], $tenant['unit_id'], $category, $description, $priority]);
+            $success = 'Maintenance request submitted successfully.';
+        }
     }
 }
 
@@ -50,10 +57,12 @@ include __DIR__ . '/../includes/header.php';
             <?php if (!empty($success)): ?>
                 <div class="bg-green-50 text-green-800 p-3 rounded-lg text-sm"><?php echo e($success); ?></div>
             <?php endif; ?>
+            <?php if (!empty($error)): ?><div class="bg-red-50 text-red-800 p-3 rounded-lg text-sm"><?php echo e($error); ?></div><?php endif; ?>
 
             <div class="bg-white p-6 rounded-xl border border-gray-100 shadow-sm max-w-2xl">
                 <h3 class="font-bold text-lg text-gray-900 mb-4">Submit New Request</h3>
                 <form method="POST" class="space-y-4">
+                    <?php echo csrf_field(); ?>
                     <div>
                         <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Category</label>
                         <select name="category" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none">

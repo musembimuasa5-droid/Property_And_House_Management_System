@@ -11,9 +11,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email'] ?? '');
     $phone = trim($_POST['phone'] ?? '');
     $password = $_POST['password'] ?? '';
+    $national_id = trim($_POST['national_id'] ?? '');
+    $gender = $_POST['gender'] ?? '';
 
-    if (empty($full_name) || empty($email) || empty($password)) {
-        $error = 'Please fill in all required fields.';
+    if (!csrf_validate()) {
+        $error = 'Your session expired. Please submit the form again.';
+    } elseif (empty($full_name) || !filter_var($email, FILTER_VALIDATE_EMAIL) || empty($phone) || empty($national_id) || !in_array($gender, ['Male', 'Female', 'Other'], true) || strlen($password) < 10) {
+        $error = 'Complete all fields with a valid email and a password of at least 10 characters.';
     } else {
         $db = db();
         // Check if email exists
@@ -26,26 +30,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $role_stmt = $db->prepare("SELECT id FROM roles WHERE name = 'Tenant'");
             $role_stmt->execute();
             $role = $role_stmt->fetch();
-            $role_id = $role['id'] ?? 3;
+            if (!$role) { $error = 'Tenant registration is temporarily unavailable.'; }
+            $role_id = $role['id'] ?? 0;
 
+            if (!$error) {
             $hash = password_hash($password, PASSWORD_DEFAULT);
             $db->beginTransaction();
 
-            $user_stmt = $db->prepare("INSERT INTO users (role_id, full_name, email, phone_number, password_hash, status) VALUES (?, ?, ?, ?, ?, 'Active')");
+            $user_stmt = $db->prepare("INSERT INTO users (role_id, full_name, email, phone, password_hash, status) VALUES (?, ?, ?, ?, ?, 'Active')");
             $user_stmt->execute([$role_id, $full_name, $email, $phone, $hash]);
             $user_id = $db->lastInsertId();
 
-            $tenant_stmt = $db->prepare("INSERT INTO tenants (user_id, full_name, phone_number, email, status) VALUES (?, ?, ?, ?, 'Active')");
-            $tenant_stmt->execute([$user_id, $full_name, $phone, $email]);
+            $tenant_stmt = $db->prepare("INSERT INTO tenants (user_id, full_name, phone, email, national_id, gender, status) VALUES (?, ?, ?, ?, ?, ?, 'Active')");
+            $tenant_stmt->execute([$user_id, $full_name, $phone, $email, $national_id, $gender]);
 
             $db->commit();
             $success = 'Account created successfully! You can now log in.';
+            }
         }
     }
 }
 
 $page_title = 'Tenant Registration';
 include __DIR__ . '/../includes/header.php';
+include __DIR__ . '/../includes/navbar.php';
 ?>
 
 <div class="flex-1 flex items-center justify-center px-4 py-12 bg-gray-50">
@@ -61,6 +69,7 @@ include __DIR__ . '/../includes/header.php';
         <?php endif; ?>
 
         <form method="POST" class="space-y-4">
+            <?php echo csrf_field(); ?>
             <div>
                 <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Full Name</label>
                 <input type="text" name="full_name" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary">
@@ -71,11 +80,13 @@ include __DIR__ . '/../includes/header.php';
             </div>
             <div>
                 <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Phone Number</label>
-                <input type="text" name="phone" placeholder="+2547..." class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary">
+                <input type="tel" name="phone" required placeholder="+2547..." class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary">
             </div>
+            <div><label class="block text-xs font-semibold text-gray-500 uppercase mb-1">National ID</label><input type="text" name="national_id" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"></div>
+            <div><label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Gender</label><select name="gender" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"><option value="">Select</option><option>Female</option><option>Male</option><option>Other</option></select></div>
             <div>
                 <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Password</label>
-                <input type="password" name="password" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary">
+                <input type="password" name="password" minlength="10" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary">
             </div>
             <button type="submit" class="w-full bg-primary hover:bg-blue-800 text-white font-semibold py-2.5 rounded-lg text-sm transition">
                 Register Account

@@ -9,14 +9,20 @@ class Database {
     private static $instance = null;
     private $conn;
 
-    private $host = 'localhost';
-    private $db_name = 'nairobi_property_db';
-    private $username = 'root';
-    private $password = '';
+    private $host;
+    private $db_name;
+    private $username;
+    private $password;
+    private $port;
     private $charset = 'utf8mb4';
 
     private function __construct() {
-        $dsn = "mysql:host={$this->host};dbname={$this->db_name};charset={$this->charset}";
+        $this->host = getenv('DB_HOST') ?: 'localhost';
+        $this->db_name = getenv('DB_NAME') ?: 'nairobi_property_db';
+        $this->username = getenv('DB_USER') ?: 'root';
+        $this->password = getenv('DB_PASS') ?: '';
+        $this->port = getenv('DB_PORT') ?: '3306';
+        $dsn = "mysql:host={$this->host};port={$this->port};dbname={$this->db_name};charset={$this->charset}";
         $options = [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
@@ -26,11 +32,9 @@ class Database {
         try {
             $this->conn = new PDO($dsn, $this->username, $this->password, $options);
         } catch (\PDOException $e) {
-            if (APP_DEBUG) {
-                die("Database Connection Error: " . $e->getMessage());
-            } else {
-                die("System maintenance in progress. Please try again later.");
-            }
+            error_log('Database connection failed: ' . $e->getMessage());
+            http_response_code(503);
+            die(APP_DEBUG ? 'Database unavailable. Check the local database configuration.' : 'System maintenance in progress. Please try again later.');
         }
     }
 

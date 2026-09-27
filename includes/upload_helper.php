@@ -8,12 +8,16 @@
  * @return array ['success' => bool, 'path' => string|null, 'error' => string|null]
  */
 function uploadApplicationFile($file, $subfolder, $allowed_extensions = ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx']) {
-    if (!isset($file) || $file['error'] === UPLOAD_ERR_NO_FILE) {
+    $allowedFolders = ['properties', 'tenants', 'documents', 'maintenance'];
+    if (!in_array($subfolder, $allowedFolders, true)) {
+        return ['success' => false, 'path' => null, 'error' => 'Invalid upload destination.'];
+    }
+    if (!isset($file) || !isset($file['error']) || $file['error'] === UPLOAD_ERR_NO_FILE) {
         return ['success' => false, 'path' => null, 'error' => 'No file uploaded.'];
     }
 
     if ($file['error'] !== UPLOAD_ERR_OK) {
-        return ['success' => false, 'path' => null, 'error' => 'Upload failed with error code: ' . $file['error']];
+        return ['success' => false, 'path' => null, 'error' => 'Upload failed. Please try again.'];
     }
 
     // Max size: 5MB
@@ -24,12 +28,18 @@ function uploadApplicationFile($file, $subfolder, $allowed_extensions = ['jpg', 
     $file_info = pathinfo($file['name']);
     $ext = strtolower($file_info['extension']);
 
-    if (!in_array($ext, $allowed_extensions)) {
-        return ['success' => false, 'path' => null, 'error' => 'Invalid file extension: ' . $ext];
+    if (!in_array($ext, $allowed_extensions, true) || !is_uploaded_file($file['tmp_name'])) {
+        return ['success' => false, 'path' => null, 'error' => 'Invalid file.'];
+    }
+
+    $mime = (new finfo(FILEINFO_MIME_TYPE))->file($file['tmp_name']);
+    $allowedMimeTypes = ['jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png', 'pdf' => 'application/pdf', 'doc' => 'application/msword', 'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    if (!isset($allowedMimeTypes[$ext]) || $mime !== $allowedMimeTypes[$ext]) {
+        return ['success' => false, 'path' => null, 'error' => 'The file content does not match an allowed type.'];
     }
 
     // Generate a unique, collision-resistant filename
-    $new_filename = uniqid('file_', true) . '.' . $ext;
+    $new_filename = bin2hex(random_bytes(16)) . '.' . $ext;
     
     // Define absolute target directory
     $target_dir = __DIR__ . '/../uploads/' . trim($subfolder, '/') . '/';

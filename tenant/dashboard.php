@@ -20,10 +20,10 @@ if (!$tenant) {
 
 // Fetch active lease and unit
 $lease_stmt = $db->prepare("
-    l.*, u.unit_number, u.monthly_rent, p.name as property_name 
-    FROM leases l 
-    JOIN units u ON l.unit_id = u.id 
-    JOIN properties p ON l.property_id = p.id 
+    SELECT l.*, u.unit_number, u.monthly_rent, p.name as property_name
+    FROM leases l
+    JOIN units u ON l.unit_id = u.id
+    JOIN properties p ON l.property_id = p.id
     WHERE l.tenant_id = ? AND l.status = 'Active'
 ");
 $lease_stmt->execute([$tenant['id']]);
@@ -32,7 +32,7 @@ $lease = $lease_stmt->fetch();
 // Fetch latest rent balance/charges
 $balance = 0;
 if ($lease) {
-    $charge_stmt = $db->prepare("SELECT SUM(total_due) as total FROM rent_charges WHERE lease_id = ? AND status != 'Paid'");
+    $charge_stmt = $db->prepare("SELECT SUM(GREATEST(rc.total_due - COALESCE(alloc.paid, 0), 0)) AS total FROM rent_charges rc LEFT JOIN (SELECT rent_charge_id, SUM(allocated_amount) AS paid FROM payment_allocations GROUP BY rent_charge_id) alloc ON alloc.rent_charge_id = rc.id WHERE rc.lease_id = ? AND rc.status != 'Paid'");
     $charge_stmt->execute([$lease['id']]);
     $balance = $charge_stmt->fetch()['total'] ?? 0;
 }

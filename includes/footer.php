@@ -3,15 +3,6 @@
             &copy; <?php echo date('Y'); ?> <?php echo APP_NAME; ?>. All rights reserved. Designed for Nairobi Property Management.
         </div>
     </footer>
-    <!-- Global JavaScript Helpers -->
-    <script>
-        // Toggle mobile sidebar
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            if (sidebar) {
-                sidebar.classList.toggle('-translate-x-full');
-            }
-        }
-    </script>
+    <script src="<?php echo BASE_URL; ?>/assets/app.js" defer></script>
 </body>
 </html>

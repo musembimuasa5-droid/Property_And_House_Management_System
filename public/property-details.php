@@ -4,9 +4,9 @@ require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/functions.php';
 
 $db = db();
-$property_id = $_GET['id'] ?? 0;
+$property_id = filter_var($_GET['id'] ?? 0, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: 0;
 
-$stmt = $db->prepare("SELECT p.*, l.estate, l.sub_county FROM properties p JOIN locations l ON p.location_id = l.id WHERE p.id = ?");
+$stmt = $db->prepare("SELECT p.*, l.estate, l.sub_county FROM properties p JOIN locations l ON p.location_id = l.id WHERE p.id = ? AND p.status = 'Active'");
 $stmt->execute([$property_id]);
 $property = $stmt->fetch();
 
@@ -21,6 +21,7 @@ $units = $units_stmt->fetchAll();
 
 $success_msg = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!csrf_validate()) { $success_msg = 'Your session expired. Please reload the page and try again.'; }
     $name = trim($_POST['visitor_name'] ?? '');
     $phone = trim($_POST['visitor_phone'] ?? '');
     $email = trim($_POST['visitor_email'] ?? '');
@@ -28,7 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $time = $_POST['preferred_time'] ?? '';
     $message = trim($_POST['message'] ?? '');
 
-    if (!empty($name) && !empty($phone) && !empty($date) && !empty($time)) {
+    if (!$success_msg && $property['status'] === 'Active' && !empty($name) && !empty($phone) && filter_var($email, FILTER_VALIDATE_EMAIL) && !empty($date) && $date >= date('Y-m-d') && !empty($time)) {
         $req = $db->prepare("INSERT INTO viewing_requests (property_id, visitor_name, visitor_phone, visitor_email, preferred_date, preferred_time, message) VALUES (?, ?, ?, ?, ?, ?, ?)");
         $req->execute([$property_id, $name, $phone, $email, $date, $time, $message]);
         $success_msg = 'Viewing request submitted successfully! Management will contact you.';
@@ -37,6 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $page_title = $property['name'];
 include __DIR__ . '/../includes/header.php';
+include __DIR__ . '/../includes/navbar.php';
 ?>
 
 <div class="flex-1 flex flex-col bg-gray-50">
@@ -81,6 +83,7 @@ include __DIR__ . '/../includes/header.php';
                     <div class="bg-green-50 text-green-800 p-3 rounded-lg text-sm mb-4"><?php echo e($success_msg); ?></div>
                 <?php endif; ?>
                 <form method="POST" class="space-y-4">
+                    <?php echo csrf_field(); ?>
                     <div>
                         <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Full Name</label>
                         <input type="text" name="visitor_name" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary outline-none">
