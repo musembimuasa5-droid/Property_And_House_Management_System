@@ -17,6 +17,7 @@ function sidebarLink($path, $icon, $label) {
 <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 pt-4 pb-2"><?php echo e($role); ?> workspace</div>
 <?php if ($currentUser) sidebarLink($dashboardPath, 'fa-chart-pie', 'Dashboard'); ?>
 <?php if (in_array($role, ['Super Admin', 'Property Manager', 'Accountant'], true)): ?>
+<?php if ($role === 'Super Admin') sidebarLink('admin/people.php', 'fa-users', 'People Directory'); ?>
 <?php sidebarLink('public/properties.php', 'fa-building', 'Property Directory'); ?>
 <?php elseif ($role === 'Landlord'): ?>
 <?php sidebarLink('public/properties.php', 'fa-building', 'Public Directory'); ?>
