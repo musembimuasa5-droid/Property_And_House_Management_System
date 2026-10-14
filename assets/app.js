@@ -7,6 +7,25 @@ function toggleSidebar() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-password-toggle]').forEach((button) => {
+        const passwordInput = document.getElementById(button.getAttribute('aria-controls'));
+        if (!passwordInput) return;
+
+        button.addEventListener('click', () => {
+            const isVisible = passwordInput.type === 'text';
+            passwordInput.type = isVisible ? 'password' : 'text';
+            button.setAttribute('aria-pressed', String(!isVisible));
+            button.setAttribute('aria-label', isVisible ? 'Show password' : 'Hide password');
+            button.setAttribute('title', isVisible ? 'Show password' : 'Hide password');
+
+            const icon = button.querySelector('i');
+            if (icon) {
+                icon.classList.toggle('fa-eye', isVisible);
+                icon.classList.toggle('fa-eye-slash', !isVisible);
+            }
+        });
+    });
+
     const currentPath = window.location.pathname.replace(/\/+$/, '') || '/';
     const sidebar = document.getElementById('sidebar');
     if (sidebar) {
