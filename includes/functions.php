@@ -44,7 +44,8 @@ function sample_property_image($property_id) {
         'assets/house2.jpg',
         'assets/house3.jpg',
         'assets/house4.jpg',
-        'assets/house5.jpg',    ];
+        'assets/house5.jpg',
+    ];
     $index = max(0, (abs((int)$property_id) - 1) % count($images));
     return $images[$index];
 }
