@@ -16,7 +16,7 @@ $dashboardUrl = $currentUser ? BASE_URL . '/' . dashboardPathForRole($role) : ''
       <a href="<?php echo BASE_URL; ?>/" <?php echo basename($_SERVER['SCRIPT_NAME'] ?? '') === 'index.php' ? 'aria-current="page"' : ''; ?>>Home</a>
       <a href="<?php echo BASE_URL; ?>/public/properties.php">Properties</a>
       <a href="<?php echo BASE_URL; ?>/#services">Services</a>
-      <a href="<?php echo BASE_URL; ?>/#about">About</a>
+      <a href="<?php echo BASE_URL; ?>/public/about.php">About</a>
       <a href="<?php echo BASE_URL; ?>/public/contact.php">Contact</a>
       <span class="public-nav-actions">
         <?php if ($currentUser): ?>

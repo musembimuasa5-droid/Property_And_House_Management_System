@@ -18,6 +18,7 @@ function sidebarLink($path, $icon, $label) {
 <?php if ($currentUser) sidebarLink($dashboardPath, 'fa-chart-pie', 'Dashboard'); ?>
 <?php if (in_array($role, ['Super Admin', 'Property Manager', 'Accountant'], true)): ?>
 <?php if ($role === 'Super Admin') sidebarLink('admin/people.php', 'fa-users', 'People Directory'); ?>
+<?php if ($role === 'Super Admin') sidebarLink('admin/contact_messages.php', 'fa-envelope-open-text', 'Contact Messages'); ?>
 <?php sidebarLink('public/properties.php', 'fa-building', 'Property Directory'); ?>
 <?php elseif ($role === 'Landlord'): ?>
 <?php sidebarLink('public/properties.php', 'fa-building', 'Public Directory'); ?>

@@ -4,10 +4,10 @@ $isPublicPage = strpos($_SERVER['SCRIPT_NAME'] ?? '', '/public/') !== false || b
 <?php if ($isPublicPage): ?>
 <footer class="public-footer">
   <div class="site-container footer-grid">
-    <div class="footer-brand"><a class="brand footer-logo" href="<?php echo BASE_URL; ?>/"><img class="brand-logo" src="<?php echo BASE_URL; ?>/assets/houselogo.avif" alt=""><span><?php echo e(APP_NAME); ?></span></a><p>Property search and tenancy management for Nairobi.</p><p class="footer-location">Nairobi, Kenya</p></div>
-    <div><h2>Explore</h2><a href="<?php echo BASE_URL; ?>/">Home</a><a href="<?php echo BASE_URL; ?>/public/properties.php">Available properties</a><a href="<?php echo BASE_URL; ?>/#services">Services</a><a href="<?php echo BASE_URL; ?>/public/contact.php">Contact</a></div>
+    <div class="footer-brand"><a class="brand footer-logo" href="<?php echo BASE_URL; ?>/"><img class="brand-logo" src="<?php echo BASE_URL; ?>/assets/houselogo.avif" alt=""><span><?php echo e(APP_NAME); ?></span></a><p>Urban Escape helps tenants, landlords, and property teams manage properties, rent, and maintenance more clearly.</p><p class="footer-location">Nairobi, Kenya</p></div>
+    <div><h2>Explore</h2><a href="<?php echo BASE_URL; ?>/">Home</a><a href="<?php echo BASE_URL; ?>/public/properties.php">Available properties</a><a href="<?php echo BASE_URL; ?>/public/about.php">About</a><a href="<?php echo BASE_URL; ?>/public/contact.php">Contact</a></div>
     <div><h2>Property portal</h2><a href="<?php echo BASE_URL; ?>/public/login.php">Manager sign in</a><a href="<?php echo BASE_URL; ?>/public/login.php">Tenant sign in</a><a href="<?php echo BASE_URL; ?>/public/register.php">Tenant registration</a></div>
-    <div><h2>How we help</h2><a href="<?php echo BASE_URL; ?>/#about">Property management</a><a href="<?php echo BASE_URL; ?>/#services">Rent &amp; payments</a><a href="<?php echo BASE_URL; ?>/#services">Maintenance requests</a></div>
+    <div><h2>How we help</h2><a href="<?php echo BASE_URL; ?>/public/about.php">Property management</a><a href="<?php echo BASE_URL; ?>/public/properties.php">Rent &amp; payments</a><a href="<?php echo BASE_URL; ?>/tenant/maintenance.php">Maintenance requests</a></div>
   </div>
   <div class="footer-bottom"><div class="site-container">&copy; <?php echo date('Y'); ?> <?php echo e(APP_NAME); ?>. All rights reserved.</div></div>
 </footer>

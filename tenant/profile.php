@@ -8,28 +8,67 @@ requireRole('Tenant');
 $db = db();
 $user = getCurrentUser();
 
-$tenant_stmt = $db->prepare("SELECT * FROM tenants WHERE user_id = ?");
+$tenant_stmt = $db->prepare("SELECT * FROM tenants WHERE user_id = ? LIMIT 1");
 $tenant_stmt->execute([$user['id']]);
 $tenant = $tenant_stmt->fetch();
 
+if (!$tenant) {
+    http_response_code(403);
+    exit('Tenant profile is not linked to this account. Please contact an administrator.');
+}
+
 $success = '';
 $error = '';
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && $tenant) {
-    if (!csrf_validate()) { http_response_code(400); $error = 'Your session expired. Please reload this page and try again.'; }
-    else {
-    $phone = trim($_POST['phone_number'] ?? '');
-    $emergency_name = trim($_POST['emergency_contact_name'] ?? '');
-    $emergency_phone = trim($_POST['emergency_contact_phone'] ?? '');
 
-    $upd = $db->prepare("UPDATE tenants SET phone = ?, emergency_contact_name = ?, emergency_contact_phone = ? WHERE id = ?");
-    $upd->execute([$phone, $emergency_name, $emergency_phone, $tenant['id']]);
-    $user_update = $db->prepare("UPDATE users SET phone = ? WHERE id = ?");
-    $user_update->execute([$phone, $user['id']]);
-    $success = 'Profile updated successfully.';
-    
-    // Refresh tenant data
-    $tenant_stmt->execute([$user['id']]);
-    $tenant = $tenant_stmt->fetch();
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!csrf_validate()) {
+        http_response_code(400);
+        $error = 'Your session expired. Please reload the page and try again.';
+    } else {
+        $full_name = trim($_POST['full_name'] ?? '');
+        $email = trim($_POST['email'] ?? '');
+        $phone = trim($_POST['phone_number'] ?? '');
+        $emergency_name = trim($_POST['emergency_contact_name'] ?? '');
+        $emergency_phone = trim($_POST['emergency_contact_phone'] ?? '');
+
+        if ($full_name === '') {
+            $error = 'Please provide your full name.';
+        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $error = 'Please provide a valid email address.';
+        } elseif (!is_valid_phone_number($phone)) {
+            $error = 'Please provide a valid phone number such as 0712345678 or +254712345678.';
+        } elseif ($emergency_phone !== '' && !is_valid_phone_number($emergency_phone)) {
+            $error = 'Please provide a valid emergency contact phone number.';
+        } else {
+            $duplicateUser = $db->prepare("SELECT id FROM users WHERE email = ? AND id != ? LIMIT 1");
+            $duplicateUser->execute([$email, $user['id']]);
+            if ($duplicateUser->fetch()) {
+                $error = 'This email address is already in use by another account.';
+            } else {
+                try {
+                    $db->beginTransaction();
+
+                    $userUpdate = $db->prepare("UPDATE users SET full_name = ?, email = ?, phone = ? WHERE id = ?");
+                    $userUpdate->execute([$full_name, $email, $phone, $user['id']]);
+
+                    $tenantUpdate = $db->prepare("UPDATE tenants SET full_name = ?, email = ?, phone = ?, emergency_contact_name = ?, emergency_contact_phone = ? WHERE id = ?");
+                    $tenantUpdate->execute([$full_name, $email, $phone, $emergency_name, $emergency_phone, $tenant['id']]);
+
+                    $db->commit();
+
+                    $_SESSION['full_name'] = $full_name;
+                    $_SESSION['email'] = $email;
+                    $success = 'Profile updated successfully.';
+
+                    $tenant_stmt->execute([$user['id']]);
+                    $tenant = $tenant_stmt->fetch();
+                } catch (Exception $e) {
+                    $db->rollBack();
+                    error_log('Profile update failed: ' . $e->getMessage());
+                    $error = 'The profile could not be updated right now. Please try again.';
+                }
+            }
+        }
     }
 }
 
@@ -50,15 +89,15 @@ include __DIR__ . '/../includes/header.php';
                     <?php echo csrf_field(); ?>
                     <div>
                         <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Full Name</label>
-                        <input type="text" disabled value="<?php echo e($tenant['full_name']); ?>" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-500">
+                        <input type="text" name="full_name" value="<?php echo e($tenant['full_name']); ?>" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" required>
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Email Address</label>
-                        <input type="email" disabled value="<?php echo e($tenant['email']); ?>" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-500">
+                        <input type="email" name="email" value="<?php echo e($tenant['email']); ?>" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" required>
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Phone Number</label>
-                    <input type="text" name="phone_number" value="<?php echo e($tenant['phone']); ?>" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none">
+                        <input type="tel" name="phone_number" value="<?php echo e($tenant['phone']); ?>" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" required>
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Emergency Contact</label>

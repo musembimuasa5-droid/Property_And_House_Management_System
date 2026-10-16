@@ -33,6 +33,28 @@ function format_currency($amount) {
     return 'KSh ' . number_format((float)($amount ?? 0), 2, '.', ',');
 }
 
+function is_valid_phone_number($phone) {
+    $normalized = trim((string)($phone ?? ''));
+    if ($normalized === '') {
+        return false;
+    }
+
+    $normalized = preg_replace('/\s+/', '', $normalized);
+    if ($normalized === '') {
+        return false;
+    }
+
+    if (preg_match('/^\+?\d{10,15}$/', $normalized)) {
+        return true;
+    }
+
+    if (preg_match('/^(?:\+?254|0)[17]\d{8}$/', $normalized)) {
+        return true;
+    }
+
+    return false;
+}
+
 /**
  * Return a rotating local sample image for listings without an uploaded photo.
  * These images are illustrative and should never replace a saved property image.
