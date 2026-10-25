@@ -16,7 +16,7 @@ class Database {
     private $port;
     private $charset = 'utf8mb4';
 
-    private function __construct() {
+    private function __construct($optional = false) {
         $this->host = getenv('DB_HOST') ?: 'localhost';
         $this->db_name = getenv('DB_NAME') ?: 'nairobi_property_db';
         $this->username = getenv('DB_USER') ?: 'root';
@@ -33,14 +33,22 @@ class Database {
             $this->conn = new PDO($dsn, $this->username, $this->password, $options);
         } catch (\PDOException $e) {
             error_log('Database connection failed: ' . $e->getMessage());
+            if ($optional) {
+                $this->conn = null;
+                return;
+            }
             http_response_code(503);
             die(APP_DEBUG ? 'Database unavailable. Check the local database configuration.' : 'System maintenance in progress. Please try again later.');
         }
     }
 
-    public static function getInstance() {
+    public static function getInstance($optional = false) {
         if (self::$instance === null) {
-            self::$instance = new Database();
+            $instance = new Database($optional);
+            if ($instance->getConnection() === null) {
+                return null;
+            }
+            self::$instance = $instance;
         }
         return self::$instance->getConnection();
     }
@@ -57,6 +65,6 @@ class Database {
 }
 
 // Helper function for quick DB access
-function db() {
-    return Database::getInstance();
+function db($optional = false) {
+    return Database::getInstance($optional);
 }

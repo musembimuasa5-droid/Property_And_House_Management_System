@@ -26,3 +26,15 @@ Seeded user rows use a bundled development bcrypt hash. The original seed commen
 - M-Pesa/Daraja is not integrated; payment methods are recorded manually.
 
 The `database/schema.sql` file defines the database structure. Existing databases require a reviewed migration before schema changes; importing the schema will not alter their current tables.
+
+## Illustrative property photography
+
+The optimized WebP images in `assets/` are licensed illustrations from Unsplash. They depict generic contemporary homes and interiors; they are not verified photographs of the Nairobi listings shown beside them. The homepage and listing cards label illustrative or sample imagery where applicable.
+
+- `modern-residential-building.webp` — [Unsplash photo](https://images.unsplash.com/photo-1600596542815-ffad4c1539a9)
+- `modern-family-home.webp` — [Unsplash photo](https://images.unsplash.com/photo-1600047509807-ba8f99d2cdde)
+- `airy-apartment-living-room.webp` — [Unsplash photo](https://images.unsplash.com/photo-1600210492486-724fe5c67fb0)
+- `bright-open-plan-lounge.webp` — [Unsplash photo](https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea)
+- `modern-home-interior.webp` — [Unsplash photo](https://images.unsplash.com/photo-1600607687939-ce8a6c25118c)
+
+These images are used under the [Unsplash License](https://unsplash.com/license). Photographer attribution is appreciated but not required by the license.

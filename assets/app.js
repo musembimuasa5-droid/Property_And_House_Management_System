@@ -26,6 +26,56 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    const dialog = document.getElementById('viewing-dialog');
+    const form = document.getElementById('viewing-form');
+    const success = document.getElementById('viewing-success');
+    const propertyName = document.getElementById('viewing-property-name');
+    const propertyLocation = document.getElementById('viewing-property-location');
+    const propertyImage = document.getElementById('viewing-image');
+    if (dialog instanceof HTMLDialogElement && form instanceof HTMLFormElement && success && propertyName && propertyLocation && propertyImage instanceof HTMLImageElement) {
+        let opener = null;
+        const dateInput = form.querySelector('input[name="date"]');
+        if (dateInput) {
+            const localDate = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+            dateInput.min = localDate;
+        }
+
+        document.querySelectorAll('[data-viewing-property]').forEach((button) => {
+            button.addEventListener('click', () => {
+                opener = button;
+                propertyName.textContent = button.dataset.viewingProperty || 'Selected home';
+                propertyLocation.textContent = button.dataset.viewingLocation || '';
+                propertyImage.src = button.dataset.viewingImage || '';
+                propertyImage.alt = 'Home exterior for ' + propertyName.textContent;
+                form.reset();
+                form.hidden = false;
+                success.hidden = true;
+                dialog.showModal();
+            });
+        });
+
+        dialog.querySelectorAll('[data-close-viewing]').forEach((button) => {
+            button.addEventListener('click', () => dialog.close());
+        });
+
+        dialog.addEventListener('click', (event) => {
+            if (event.target === dialog) dialog.close();
+        });
+
+        dialog.addEventListener('close', () => {
+            if (opener instanceof HTMLElement) opener.focus();
+        });
+
+        form.addEventListener('submit', (event) => {
+            event.preventDefault();
+            if (!form.reportValidity()) return;
+            form.hidden = true;
+            success.hidden = false;
+            const doneButton = success.querySelector('button');
+            if (doneButton) doneButton.focus();
+        });
+    }
+
     const currentPath = window.location.pathname.replace(/\/+$/, '') || '/';
     const sidebar = document.getElementById('sidebar');
     if (sidebar) {

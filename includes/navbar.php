@@ -10,22 +10,21 @@ $dashboardUrl = $currentUser ? BASE_URL . '/' . dashboardPathForRole($role) : ''
 <?php if ($isPublicPage): ?>
 <header class="public-header">
   <div class="site-container public-header-inner">
-    <a class="brand" href="<?php echo BASE_URL; ?>/" aria-label="<?php echo e(APP_NAME); ?> home"><img class="brand-logo" src="<?php echo BASE_URL; ?>/assets/houselogo.avif" alt=""><span><?php echo e(APP_NAME); ?></span></a>
+    <a class="brand" href="<?php echo BASE_URL; ?>/" aria-label="<?php echo e(APP_NAME); ?> home"><span class="brand-symbol" aria-hidden="true"><i class="fa-solid fa-house"></i></span><span>Property and House<br class="brand-break"> Management System</span></a>
     <button type="button" class="mobile-menu-toggle" aria-controls="public-navigation" aria-expanded="false" aria-label="Open navigation"><span></span><span></span><span></span></button>
     <nav id="public-navigation" class="public-navigation" aria-label="Main navigation">
       <a href="<?php echo BASE_URL; ?>/" <?php echo basename($_SERVER['SCRIPT_NAME'] ?? '') === 'index.php' ? 'aria-current="page"' : ''; ?>>Home</a>
-      <a href="<?php echo BASE_URL; ?>/public/properties.php">Properties</a>
+      <a href="<?php echo BASE_URL; ?>/public/properties.php">Explore Houses</a>
       <a href="<?php echo BASE_URL; ?>/#services">Services</a>
-      <a href="<?php echo BASE_URL; ?>/public/about.php">About</a>
+      <a href="<?php echo BASE_URL; ?>/public/about.php">About Us</a>
       <a href="<?php echo BASE_URL; ?>/public/contact.php">Contact</a>
       <span class="public-nav-actions">
         <?php if ($currentUser): ?>
-          <?php if ($dashboardUrl !== ''): ?><a class="nav-login" href="<?php echo $dashboardUrl; ?>">My dashboard</a><?php endif; ?>
+          <?php if ($dashboardUrl !== ''): ?><a class="nav-login" href="<?php echo $dashboardUrl; ?>">Dashboard</a><?php endif; ?>
           <form method="post" action="<?php echo BASE_URL; ?>/api/logout.php"><?php echo csrf_field(); ?><button class="nav-cta" type="submit">Log out</button></form>
         <?php else: ?>
-           <a class="nav-login" href="<?php echo BASE_URL; ?>/public/register.php">Register</a>
-          <a class="nav-login" href="<?php echo BASE_URL; ?>/public/login.php">Log in</a>
-          <a class="nav-cta" href="<?php echo BASE_URL; ?>/public/properties.php">Find a home</a>
+          <a class="nav-login" href="<?php echo BASE_URL; ?>/public/login.php">Login</a>
+          <a class="nav-cta" href="<?php echo BASE_URL; ?>/public/register.php">Register</a>
         <?php endif; ?>
       </span>
     </nav>
