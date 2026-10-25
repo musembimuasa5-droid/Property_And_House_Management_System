@@ -5,139 +5,291 @@ require_once __DIR__ . '/../config/constants.php';
 require_once __DIR__ . '/../includes/functions.php';
 
 $db = db();
+$filterErrors = [];
+$readFilter = static function ($key) {
+    return isset($_GET[$key]) && is_string($_GET[$key]) ? trim($_GET[$key]) : '';
+};
 
-// Handle search filters
-$location = isset($_GET['location']) && is_string($_GET['location']) ? trim($_GET['location']) : '';
-$house_type = $_GET['house_type'] ?? '';
-$property_type = $_GET['type'] ?? '';
-$max_rent = $_GET['max_rent'] ?? '';
-$min_rent = $_GET['min_rent'] ?? '';
-$bedrooms = $_GET['bedrooms'] ?? '';
-$property_type = in_array($property_type, PROPERTY_TYPES, true) ? $property_type : '';
-$house_type = in_array($house_type, UNIT_TYPES, true) ? $house_type : '';
+$location = $readFilter('location');
+$house_type = $readFilter('house_type');
+$property_type = $readFilter('type');
+$min_rent = $readFilter('min_rent');
+$max_rent = $readFilter('max_rent');
+$bedrooms = $readFilter('bedrooms');
+$sort = $readFilter('sort');
 
-$query = "SELECT p.*, l.estate, l.sub_county, MIN(u.monthly_rent) as min_rent, COUNT(u.id) AS available_units
-          FROM properties p
-          JOIN locations l ON p.location_id = l.id
-          JOIN units u ON p.id = u.property_id
-          WHERE p.status = 'Active' AND u.status = 'Vacant'";
+if (strlen($location) > 100 || preg_match('/[\x00-\x1F\x7F]/', $location)) {
+    $filterErrors[] = 'Enter a valid neighbourhood or estate.';
+}
+if ($property_type !== '' && !in_array($property_type, PROPERTY_TYPES, true)) {
+    $filterErrors[] = 'Choose a property type from the list.';
+}
+if ($house_type !== '' && !in_array($house_type, UNIT_TYPES, true)) {
+    $filterErrors[] = 'Choose a house type from the list.';
+}
+if ($bedrooms !== '' && !in_array($bedrooms, ['0', '1', '2', '3', '4'], true)) {
+    $filterErrors[] = 'Choose a valid bedroom count.';
+}
+if ($sort !== '' && !in_array($sort, ['price_asc', 'price_desc', 'name'], true)) {
+    $filterErrors[] = 'Choose a valid sort order.';
+}
+
+$validRent = static function ($value) {
+    return $value === '' || (bool)preg_match('/^\d{1,9}(?:\.\d{1,2})?$/', $value);
+};
+if (!$validRent($min_rent) || !$validRent($max_rent)) {
+    $filterErrors[] = 'Enter monthly rent as a non-negative amount with up to two decimal places.';
+}
+if ($min_rent !== '' && $max_rent !== '' && $validRent($min_rent) && $validRent($max_rent) && (float)$min_rent > (float)$max_rent) {
+    $filterErrors[] = 'The minimum rent cannot be greater than the maximum rent.';
+}
+
+$locationStmt = $db->query('SELECT estate AS location_name FROM locations UNION SELECT sub_county AS location_name FROM locations ORDER BY location_name');
+$locations = $locationStmt->fetchAll(PDO::FETCH_COLUMN);
+
+$where = ["p.status = 'Active'", "u.status = 'Vacant'"];
 $params = [];
-
-if (!empty($location)) {
-    $query .= " AND (l.estate = ? OR l.sub_county = ?)";
+if ($location !== '') {
+    $where[] = '(l.estate = ? OR l.sub_county = ?)';
     $params[] = $location;
     $params[] = $location;
 }
-if (!empty($house_type)) {
-    $query .= " AND u.house_type = ?";
+if ($house_type !== '') {
+    $where[] = 'u.house_type = ?';
     $params[] = $house_type;
 }
-if (!empty($max_rent)) {
-    if (is_numeric($max_rent) && $max_rent >= 0) { $query .= " AND u.monthly_rent <= ?"; $params[] = (float)$max_rent; }
-}
-if (!empty($min_rent) && is_numeric($min_rent) && $min_rent >= 0) {
-    $query .= " AND u.monthly_rent >= ?";
-    $params[] = (float)$min_rent;
-}
-if (!empty($property_type)) {
-    $query .= " AND p.property_type = ?";
+if ($property_type !== '') {
+    $where[] = 'p.property_type = ?';
     $params[] = $property_type;
 }
-if ($bedrooms !== '' && ctype_digit((string)$bedrooms)) {
-    if ((int)$bedrooms === 0) {
-        $query .= " AND u.house_type IN ('Bedsitter', 'Studio')";
+if ($min_rent !== '') {
+    $where[] = 'u.monthly_rent >= ?';
+    $params[] = $min_rent;
+}
+if ($max_rent !== '') {
+    $where[] = 'u.monthly_rent <= ?';
+    $params[] = $max_rent;
+}
+if ($bedrooms !== '') {
+    if ($bedrooms === '0') {
+        $where[] = "u.house_type IN ('Bedsitter', 'Studio')";
     } else {
-        $query .= " AND u.bedrooms >= ?";
+        $where[] = 'u.bedrooms >= ?';
         $params[] = (int)$bedrooms;
     }
 }
 
-$query .= " GROUP BY p.id, l.estate, l.sub_county";
-$stmt = $db->prepare($query);
-$stmt->execute($params);
-$properties = $stmt->fetchAll();
+$pageSize = 9;
+$requestedPage = filter_var($_GET['page'] ?? 1, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: 1;
+$totalProperties = 0;
+$properties = [];
+$totalPages = 0;
+$page = 1;
+$resultStart = 0;
+$resultEnd = 0;
 
-$page_title = 'Browse Available Properties';
+if (!$filterErrors) {
+    $filterSql = implode(' AND ', $where);
+    $countStmt = $db->prepare("SELECT COUNT(DISTINCT p.id) FROM properties p JOIN locations l ON p.location_id = l.id JOIN units u ON p.id = u.property_id WHERE {$filterSql}");
+    $countStmt->execute($params);
+    $totalProperties = (int)$countStmt->fetchColumn();
+    $totalPages = (int)ceil($totalProperties / $pageSize);
+    $page = $totalPages > 0 ? min($requestedPage, $totalPages) : 1;
+    $offset = ($page - 1) * $pageSize;
+
+    $sortSql = [
+        'price_asc' => 'min_rent ASC, p.name ASC',
+        'price_desc' => 'min_rent DESC, p.name ASC',
+        'name' => 'p.name ASC',
+    ][$sort] ?? 'p.created_at DESC, p.name ASC';
+
+    $query = "SELECT p.*, l.estate, l.sub_county, MIN(u.monthly_rent) AS min_rent,
+                     COUNT(DISTINCT u.id) AS available_units,
+                     GROUP_CONCAT(DISTINCT u.house_type ORDER BY u.house_type SEPARATOR ', ') AS house_types
+              FROM properties p
+              JOIN locations l ON p.location_id = l.id
+              JOIN units u ON p.id = u.property_id
+              WHERE {$filterSql}
+              GROUP BY p.id, l.estate, l.sub_county
+              ORDER BY {$sortSql}
+              LIMIT ? OFFSET ?";
+    $stmt = $db->prepare($query);
+    foreach ($params as $index => $value) {
+        $stmt->bindValue($index + 1, $value, is_int($value) ? PDO::PARAM_INT : PDO::PARAM_STR);
+    }
+    $stmt->bindValue(count($params) + 1, $pageSize, PDO::PARAM_INT);
+    $stmt->bindValue(count($params) + 2, $offset, PDO::PARAM_INT);
+    $stmt->execute();
+    $properties = $stmt->fetchAll();
+    $resultStart = $totalProperties > 0 ? $offset + 1 : 0;
+    $resultEnd = min($offset + count($properties), $totalProperties);
+}
+
+$queryFilters = array_filter([
+    'location' => $location,
+    'type' => $property_type,
+    'house_type' => $house_type,
+    'min_rent' => $min_rent,
+    'max_rent' => $max_rent,
+    'bedrooms' => $bedrooms,
+    'sort' => $sort,
+], static function ($value) {
+    return $value !== '';
+});
+$page_title = 'Explore Available Houses';
+$page_description = 'Explore current rental properties and vacant units, with filters for Nairobi locations, house types, and monthly rent.';
 include __DIR__ . '/../includes/header.php';
 include __DIR__ . '/../includes/navbar.php';
 ?>
 
-<div class="flex-1 flex flex-col bg-gray-50">
-    <div class="max-w-7xl mx-auto px-4 py-8 w-full">
-        <h1 class="text-3xl font-bold text-gray-900 mb-6">Available Properties in Nairobi</h1>
+<main id="main-content" class="catalog-page">
+    <div class="site-container catalog-container">
+        <header class="catalog-intro">
+            <p class="eyebrow">Find your next home</p>
+            <h1>Explore <span class="heading-accent">available houses</span></h1>
+            <p>Browse current listings and narrow your search by neighbourhood, home type, and monthly rent. Availability shown here is based on vacant units recorded in the system.</p>
+        </header>
 
         <?php include __DIR__ . '/../includes/property-gallery.php'; ?>
 
-        <!-- Search & Filter Form -->
-        <form method="GET" class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 mb-8">
-            <div>
-                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Property type</label>
-                <select name="type" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"><option value="">Any property</option><?php foreach (PROPERTY_TYPES as $pt): ?><option value="<?php echo e($pt); ?>" <?php echo $property_type === $pt ? 'selected' : ''; ?>><?php echo e($pt); ?></option><?php endforeach; ?></select>
+        <form method="get" action="<?php echo BASE_URL; ?>/public/properties.php" class="catalog-filters" aria-label="Filter available properties">
+            <div class="catalog-filter-grid">
+                <label>
+                    <span>Neighbourhood or estate</span>
+                    <select name="location">
+                        <option value="">All locations</option>
+                        <?php if ($location !== '' && !in_array($location, $locations, true)): ?>
+                            <option value="<?php echo e($location); ?>" selected><?php echo e($location); ?></option>
+                        <?php endif; ?>
+                        <?php foreach ($locations as $locationOption): ?>
+                            <option value="<?php echo e($locationOption); ?>" <?php echo $location === $locationOption ? 'selected' : ''; ?>><?php echo e($locationOption); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+                <label>
+                    <span>Property type</span>
+                    <select name="type">
+                        <option value="">Any property type</option>
+                        <?php foreach (PROPERTY_TYPES as $typeOption): ?>
+                            <option value="<?php echo e($typeOption); ?>" <?php echo $property_type === $typeOption ? 'selected' : ''; ?>><?php echo e($typeOption); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+                <label>
+                    <span>House type</span>
+                    <select name="house_type">
+                        <option value="">Any house type</option>
+                        <?php foreach (UNIT_TYPES as $unitType): ?>
+                            <option value="<?php echo e($unitType); ?>" <?php echo $house_type === $unitType ? 'selected' : ''; ?>><?php echo e($unitType); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+                <label>
+                    <span>Minimum rent (KSh/month)</span>
+                    <input type="number" name="min_rent" min="0" step="0.01" value="<?php echo e($min_rent); ?>" placeholder="No minimum">
+                </label>
+                <label>
+                    <span>Maximum rent (KSh/month)</span>
+                    <input type="number" name="max_rent" min="0" step="0.01" value="<?php echo e($max_rent); ?>" placeholder="No maximum">
+                </label>
+                <label>
+                    <span>Bedrooms</span>
+                    <select name="bedrooms">
+                        <option value="">Any number</option>
+                        <?php foreach ([0, 1, 2, 3, 4] as $bedroomCount): ?>
+                            <option value="<?php echo $bedroomCount; ?>" <?php echo $bedrooms === (string)$bedroomCount ? 'selected' : ''; ?>><?php echo $bedroomCount === 0 ? 'Bedsitter or studio' : $bedroomCount . '+'; ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+                <label>
+                    <span>Sort by</span>
+                    <select name="sort">
+                        <option value="">Recently added</option>
+                        <option value="price_asc" <?php echo $sort === 'price_asc' ? 'selected' : ''; ?>>Price: low to high</option>
+                        <option value="price_desc" <?php echo $sort === 'price_desc' ? 'selected' : ''; ?>>Price: high to low</option>
+                        <option value="name" <?php echo $sort === 'name' ? 'selected' : ''; ?>>Property name</option>
+                    </select>
+                </label>
             </div>
-            <div>
-                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Estate / Location</label>
-                <select name="location" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary outline-none">
-                    <option value="">All Locations</option>
-                    <?php foreach (NAIROBI_ESTATES as $est): ?>
-                        <option value="<?php echo $est; ?>" <?php echo $location === $est ? 'selected' : ''; ?>><?php echo $est; ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div>
-                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">House Type</label>
-                <select name="house_type" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary outline-none">
-                    <option value="">All Types</option>
-                    <?php foreach (UNIT_TYPES as $ut): ?>
-                        <option value="<?php echo $ut; ?>" <?php echo $house_type === $ut ? 'selected' : ''; ?>><?php echo $ut; ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div>
-                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Rent range (KSh)</label>
-                <div class="flex gap-2"><input type="number" name="min_rent" min="0" value="<?php echo e($min_rent); ?>" placeholder="Min" class="min-w-0 w-1/2 px-3 py-2 border rounded-lg text-sm"><input type="number" name="max_rent" min="0" value="<?php echo e($max_rent); ?>" placeholder="Max" class="min-w-0 w-1/2 px-3 py-2 border rounded-lg text-sm"></div>
-            </div>
-            <div>
-                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Bedrooms</label><select name="bedrooms" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"><option value="">Any</option><?php foreach ([0,1,2,3,4] as $n): ?><option value="<?php echo $n; ?>" <?php echo (string)$bedrooms === (string)$n ? 'selected' : ''; ?>><?php echo $n ? $n . '+' : 'Bedsitter / studio'; ?></option><?php endforeach; ?></select>
-            </div>
-            <div class="flex items-end">
-                <button type="submit" class="w-full bg-primary hover:bg-blue-800 text-white font-semibold py-2 px-4 rounded-lg text-sm transition">
-                    Filter Properties
-                </button>
+            <div class="catalog-filter-actions">
+                <a class="catalog-clear-link" href="<?php echo BASE_URL; ?>/public/properties.php">Clear all filters</a>
+                <button class="button button-primary" type="submit"><i class="fa-solid fa-sliders" aria-hidden="true"></i> Apply filters</button>
             </div>
         </form>
 
-        <!-- Properties Grid -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            <?php if (empty($properties)): ?>
-                <div class="col-span-3 bg-white p-8 rounded-xl text-center border border-gray-100">
-                    <p class="text-gray-500">No properties found matching your search criteria.</p>
+        <?php if ($filterErrors): ?>
+            <div class="catalog-message catalog-message-error" role="alert">
+                <strong>Check your filters</strong>
+                <ul><?php foreach ($filterErrors as $error): ?><li><?php echo e($error); ?></li><?php endforeach; ?></ul>
+            </div>
+        <?php endif; ?>
+
+        <section class="catalog-results" aria-labelledby="catalog-results-heading">
+            <div class="catalog-results-heading">
+                <div>
+                    <p class="eyebrow">The listings</p>
+                    <h2 id="catalog-results-heading">Homes to explore</h2>
                 </div>
-            <?php else: ?>
-                <?php foreach ($properties as $prop): ?>
-                    <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
-                        <div class="h-48 bg-gray-200 flex items-center justify-center text-gray-400">
-                            <?php $imagePath = trim((string)($prop['property_image'] ?? ''), '/'); $imageFile = $imagePath !== '' ? dirname(__DIR__) . '/' . $imagePath : ''; ?>
-                            <?php if ($imagePath !== '' && is_file($imageFile)): ?><img class="w-full h-full object-cover" src="<?php echo BASE_URL . '/' . e($imagePath); ?>" alt="Exterior of <?php echo e($prop['name']); ?>" loading="lazy"><?php else: ?><img class="w-full h-full object-cover" src="<?php echo BASE_URL . '/' . e(sample_property_image($prop['id'])); ?>" alt="Sample home image; actual property photo not provided" loading="lazy"><?php endif; ?>
-                        </div>
-                        <div class="p-5 flex-1 flex flex-col justify-between">
-                            <div>
-                                <span class="text-xs font-semibold text-accent uppercase"><?php echo e($prop['property_type']); ?></span>
-                                <h3 class="font-bold text-lg text-gray-900 mt-1"><?php echo e($prop['name']); ?></h3>
-                                <p class="text-sm text-gray-500 mt-1"><i class="fa-solid fa-location-dot mr-1 text-red-500"></i> <?php echo e($prop['estate'] . ', ' . $prop['sub_county']); ?></p>
-                                <p class="text-sm font-semibold text-success mt-2">From <?php echo format_currency($prop['min_rent']); ?> /mo</p>
+                <?php if (!$filterErrors): ?><p class="catalog-result-count">Showing <?php echo $resultStart; ?>–<?php echo $resultEnd; ?> of <?php echo $totalProperties; ?> <?php echo $totalProperties === 1 ? 'property' : 'properties'; ?></p><?php endif; ?>
+            </div>
+
+            <?php if (!$filterErrors && !$properties): ?>
+                <div class="catalog-empty-state">
+                    <span class="catalog-empty-icon" aria-hidden="true"><i class="fa-solid fa-magnifying-glass"></i></span>
+                    <h3>No matching homes right now</h3>
+                    <p>Try a different neighbourhood or broaden the rent and house-type filters. Only active properties with vacant units appear here.</p>
+                    <a class="button button-primary" href="<?php echo BASE_URL; ?>/public/properties.php">Browse all available homes</a>
+                </div>
+            <?php elseif (!$filterErrors): ?>
+                <div class="catalog-property-grid">
+                    <?php foreach ($properties as $property): ?>
+                        <?php
+                        $imagePath = trim((string)($property['property_image'] ?? ''), '/');
+                        $imageFile = $imagePath !== '' ? dirname(__DIR__) . '/' . $imagePath : '';
+                        $hasPropertyImage = $imagePath !== '' && is_file($imageFile);
+                        $imageUrl = $hasPropertyImage ? BASE_URL . '/' . e($imagePath) : BASE_URL . '/' . e(sample_property_image($property['id']));
+                        ?>
+                        <article class="catalog-property-card">
+                            <a class="catalog-property-image" href="<?php echo BASE_URL; ?>/public/property-details.php?id=<?php echo (int)$property['id']; ?>" aria-label="View details for <?php echo e($property['name']); ?>">
+                                <img src="<?php echo $imageUrl; ?>" alt="<?php echo $hasPropertyImage ? 'Property image for ' . e($property['name']) : 'Illustrative residential image; an actual property photo was not provided'; ?>" width="840" height="560" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='<?php echo BASE_URL; ?>/assets/modern-residential-building.webp';this.alt='Illustrative residential image; an actual property photo was not provided';">
+                                <span class="catalog-availability"><i aria-hidden="true"></i> Available</span>
+                            </a>
+                            <div class="catalog-property-body">
+                                <p class="catalog-property-type"><?php echo e($property['property_type']); ?></p>
+                                <h3><a href="<?php echo BASE_URL; ?>/public/property-details.php?id=<?php echo (int)$property['id']; ?>"><?php echo e($property['name']); ?></a></h3>
+                                <p class="catalog-property-location"><i class="fa-solid fa-location-dot" aria-hidden="true"></i> <?php echo e($property['estate'] . ', ' . $property['sub_county']); ?></p>
+                                <div class="catalog-property-facts">
+                                    <span><i class="fa-solid fa-door-open" aria-hidden="true"></i> <?php echo e($property['house_types']); ?></span>
+                                    <span><i class="fa-solid fa-key" aria-hidden="true"></i> <?php echo (int)$property['available_units']; ?> vacant <?php echo (int)$property['available_units'] === 1 ? 'unit' : 'units'; ?></span>
+                                </div>
+                                <?php if (trim((string)($property['amenities'] ?? '')) !== ''): ?>
+                                    <p class="catalog-property-amenities"><i class="fa-solid fa-star" aria-hidden="true"></i> <?php echo e($property['amenities']); ?></p>
+                                <?php endif; ?>
+                                <div class="catalog-property-footer">
+                                    <p><strong><?php echo format_currency($property['min_rent']); ?></strong><span>From / month</span></p>
+                                    <a class="catalog-details-link" href="<?php echo BASE_URL; ?>/public/property-details.php?id=<?php echo (int)$property['id']; ?>">View details <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>
+                                </div>
+                                <a class="catalog-viewing-link" href="<?php echo BASE_URL; ?>/public/property-details.php?id=<?php echo (int)$property['id']; ?>#request-viewing">Schedule a viewing</a>
                             </div>
-                            <div class="mt-6 pt-4 border-t border-gray-100 flex items-center justify-between">
-                                <span class="text-xs text-gray-500"><?php echo (int)$prop['available_units']; ?> Vacant Units</span>
-                                <a href="<?php echo BASE_URL; ?>/public/property-details.php?id=<?php echo $prop['id']; ?>" class="text-sm bg-primary text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-800 transition">
-                                    View Details
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+                <?php if ($totalPages > 1): ?>
+                    <nav class="catalog-pagination" aria-label="Property results pages">
+                        <?php if ($page > 1): ?>
+                            <?php $previousQuery = $queryFilters; $previousQuery['page'] = $page - 1; ?>
+                            <a href="<?php echo BASE_URL; ?>/public/properties.php?<?php echo e(http_build_query($previousQuery)); ?>" aria-label="Previous page"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Previous</a>
+                        <?php endif; ?>
+                        <span>Page <?php echo $page; ?> of <?php echo $totalPages; ?></span>
+                        <?php if ($page < $totalPages): ?>
+                            <?php $nextQuery = $queryFilters; $nextQuery['page'] = $page + 1; ?>
+                            <a href="<?php echo BASE_URL; ?>/public/properties.php?<?php echo e(http_build_query($nextQuery)); ?>" aria-label="Next page">Next <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>
+                        <?php endif; ?>
+                    </nav>
+                <?php endif; ?>
             <?php endif; ?>
-        </div>
+        </section>
     </div>
-</div>
+</main>
 
 <?php include __DIR__ . '/../includes/footer.php'; ?>

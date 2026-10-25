@@ -7,6 +7,16 @@ function toggleSidebar() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-login-form]').forEach((form) => {
+        form.addEventListener('submit', () => {
+            const submitButton = form.querySelector('button[type="submit"]');
+            if (!(submitButton instanceof HTMLButtonElement)) return;
+            submitButton.disabled = true;
+            const label = submitButton.querySelector('span');
+            if (label) label.textContent = 'Signing in...';
+        });
+    });
+
     document.querySelectorAll('[data-password-toggle]').forEach((button) => {
         const passwordInput = document.getElementById(button.getAttribute('aria-controls'));
         if (!passwordInput) return;

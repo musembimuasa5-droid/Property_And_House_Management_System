@@ -3,8 +3,6 @@ require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/functions.php';
 
-$success = '';
-$error = '';
 $form = [
     'name' => '',
     'email' => '',
@@ -12,27 +10,76 @@ $form = [
     'subject' => '',
     'message' => '',
 ];
+$errors = [];
+$success = isset($_SESSION['contact_success']) && is_string($_SESSION['contact_success']) ? $_SESSION['contact_success'] : '';
+unset($_SESSION['contact_success']);
+$subjects = [
+    'Property enquiry',
+    'Viewing request',
+    'Tenancy support',
+    'Maintenance request',
+    'Platform support',
+    'General enquiry',
+];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $form['name'] = trim($_POST['name'] ?? '');
-    $form['email'] = trim($_POST['email'] ?? '');
-    $form['phone'] = trim($_POST['phone'] ?? '');
-    $form['subject'] = trim($_POST['subject'] ?? '');
-    $form['message'] = trim($_POST['message'] ?? '');
+    $postValue = static function ($key) {
+        return isset($_POST[$key]) && is_string($_POST[$key]) ? trim($_POST[$key]) : '';
+    };
+    foreach (array_keys($form) as $field) {
+        $form[$field] = $postValue($field);
+    }
 
+    $form['name'] = preg_replace('/\s+/', ' ', $form['name']);
+    $form['email'] = trim($form['email']);
+    $form['phone'] = preg_replace('/\s+/', ' ', $form['phone']);
+    $form['subject'] = trim($form['subject']);
+    $form['message'] = trim($form['message']);
+
+    $honeypot = $postValue('website');
     if (!csrf_validate()) {
-        $error = 'Your session expired. Please reload the page and try again.';
-    } elseif ($form['name'] === '') {
-        $error = 'Please enter your full name.';
-    } elseif (!filter_var($form['email'], FILTER_VALIDATE_EMAIL)) {
-        $error = 'Please provide a valid email address.';
-    } elseif ($form['phone'] !== '' && !is_valid_phone_number($form['phone'])) {
-        $error = 'Please enter a valid phone number in the format 0712345678 or +254712345678.';
-    } elseif ($form['subject'] === '') {
-        $error = 'Please choose a subject for your enquiry.';
-    } elseif (mb_strlen($form['message']) < 10) {
-        $error = 'Your message must include at least 10 characters so we can understand your enquiry.';
-    } else {
+        $errors[] = 'Your session expired. Reload the page and submit the form again.';
+    }
+    if ($honeypot !== '') {
+        $errors[] = 'We could not accept this submission. Please check the form and try again.';
+    }
+
+    $nameLength = function_exists('mb_strlen') ? mb_strlen($form['name'], 'UTF-8') : strlen($form['name']);
+    $messageLength = function_exists('mb_strlen') ? mb_strlen($form['message'], 'UTF-8') : strlen($form['message']);
+    if ($form['name'] === '' || $nameLength > 120) {
+        $errors[] = 'Enter your name (up to 120 characters).';
+    }
+    if (strlen($form['email']) > 150 || !filter_var($form['email'], FILTER_VALIDATE_EMAIL)) {
+        $errors[] = 'Enter a valid email address (up to 150 characters).';
+    }
+    if ($form['phone'] !== '') {
+        if (strlen($form['phone']) > 30 || !preg_match('/^\+?[0-9\s().-]+$/', $form['phone'])) {
+            $errors[] = 'Enter a valid phone number using digits and standard formatting such as +254 712 345 678.';
+        } else {
+            $normalizedPhone = preg_replace('/[\s().-]/', '', $form['phone']);
+            $phoneDigits = ltrim($normalizedPhone, '+');
+            $isKenyanLocal = preg_match('/^0[17]\d{8}$/', $phoneDigits) === 1;
+            $isInternational = preg_match('/^\+?[1-9]\d{9,14}$/', $normalizedPhone) === 1;
+            if (!$isKenyanLocal && !$isInternational) {
+                $errors[] = 'Enter a valid phone number with 10 to 15 digits.';
+            } else {
+                $form['phone'] = $normalizedPhone;
+            }
+        }
+    }
+    if (!in_array($form['subject'], $subjects, true)) {
+        $errors[] = 'Choose an enquiry category from the list.';
+    }
+    if ($messageLength < 10 || $messageLength > 5000) {
+        $errors[] = 'Write a message between 10 and 5,000 characters.';
+    }
+
+    $lastSubmission = isset($_SESSION['contact_last_submission']) ? (int)$_SESSION['contact_last_submission'] : 0;
+    if ($lastSubmission > 0 && time() - $lastSubmission < 10) {
+        $errors[] = 'Please wait a few seconds before sending another enquiry.';
+    }
+
+    if (!$errors) {
         try {
             $db = db();
             $stmt = $db->prepare("INSERT INTO contact_messages (name, email, phone, subject, message, status, created_at) VALUES (?, ?, ?, ?, ?, 'New', NOW())");
@@ -41,145 +88,135 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $form['email'],
                 $form['phone'] !== '' ? $form['phone'] : null,
                 $form['subject'],
-                $form['message']
+                $form['message'],
             ]);
-            $success = 'Thank you for contacting Urban Escape. Your message has been saved and our team will respond as soon as possible.';
-            $form = ['name' => '', 'email' => '', 'phone' => '', 'subject' => '', 'message' => ''];
-        } catch (Exception $e) {
+            if ($stmt->rowCount() === 1) {
+                $_SESSION['contact_last_submission'] = time();
+                $_SESSION['contact_success'] = 'Your enquiry has been saved for the authorized support team to review. Email notifications are not configured, so this confirmation does not mean an email was sent.';
+                header('Location: ' . BASE_URL . '/public/contact.php#contact-form', true, 303);
+                exit;
+            }
+            $errors[] = 'We could not save your enquiry. Please try again.';
+        } catch (PDOException $e) {
             error_log('Contact message insert failed: ' . $e->getMessage());
-            $error = 'We could not send your message right now. Please try again later.';
+            $errors[] = 'We could not save your enquiry right now. Please try again later.';
         }
     }
 }
 
 $page_title = 'Contact Us';
-$page_description = 'Contact Urban Escape about property enquiries, tenancy support, maintenance, and general assistance.';
+$page_description = 'Contact the Property and House Management System about property enquiries, viewings, tenancy, maintenance, or platform support.';
 include __DIR__ . '/../includes/header.php';
 include __DIR__ . '/../includes/navbar.php';
 ?>
 
-<div class="flex-1 flex flex-col bg-gray-50 py-12 px-4">
-    <div class="max-w-5xl mx-auto w-full grid grid-cols-1 lg:grid-cols-[0.95fr_1.25fr] gap-8 items-start">
-        <aside class="bg-primary text-white rounded-2xl shadow-sm p-8">
-            <p class="text-xs font-semibold uppercase tracking-[0.12em] text-blue-100 mb-4">Get in touch</p>
-            <h1 class="text-3xl font-bold leading-tight mb-4">We’re here to help with your property and tenancy questions.</h1>
-            <p class="text-sm text-blue-100 leading-7 mb-8">Urban Escape supports landlords, property managers, tenants, and prospective renters with enquiries about listings, maintenance, rent, and general property support.</p>
+<main id="main-content" class="contact-page">
+    <section class="contact-intro">
+        <div class="site-container">
+            <p class="contact-eyebrow">We’re here to help</p>
+            <h1>Contact <span>our team</span></h1>
+            <p>Questions about a property, arranging a viewing, tenancy, maintenance, or using the platform? Send us a message and the authorized team can follow up.</p>
+        </div>
+    </section>
 
-            <div class="space-y-4 text-sm text-blue-50">
-                <div class="flex items-start gap-3">
-                    <i class="fa-solid fa-phone mt-1"></i>
+    <section class="site-container contact-layout" aria-label="Contact information and enquiry form">
+        <aside class="contact-sidebar">
+            <div class="contact-information">
+                <p class="contact-eyebrow">Get in touch</p>
+                <h2>How can we help?</h2>
+                <p class="contact-sidebar-intro">Choose the topic that best fits your question in the form. For an existing tenancy issue, please include only the details needed to help the team understand your enquiry.</p>
+
+                <div class="contact-detail-card">
+                    <span class="contact-detail-icon"><i class="fa-regular fa-envelope" aria-hidden="true"></i></span>
                     <div>
-                        <div class="font-semibold text-white">Phone</div>
-                        <div>Use the number on your property onboarding documents or contact the office via the official managed number.</div>
+                        <h3>Email</h3>
+                        <a href="mailto:hello@urbanescape.co.ke">hello@urbanescape.co.ke</a>
+                        <p>For property, tenancy, and platform enquiries.</p>
                     </div>
                 </div>
-                <div class="flex items-start gap-3">
-                    <i class="fa-solid fa-envelope mt-1"></i>
+                <div class="contact-detail-card">
+                    <span class="contact-detail-icon"><i class="fa-solid fa-location-dot" aria-hidden="true"></i></span>
                     <div>
-                        <div class="font-semibold text-white">Email</div>
-                        <div>hello@urbanescape.co.ke</div>
+                        <h3>Service area</h3>
+                        <p>Nairobi, Kenya</p>
+                        <p>This is the platform’s service area, not a published office address.</p>
                     </div>
                 </div>
-                <div class="flex items-start gap-3">
-                    <i class="fa-solid fa-location-dot mt-1"></i>
+                <div class="contact-detail-card">
+                    <span class="contact-detail-icon"><i class="fa-solid fa-inbox" aria-hidden="true"></i></span>
                     <div>
-                        <div class="font-semibold text-white">Location</div>
-                        <div>Nairobi, Kenya</div>
+                        <h3>Enquiry follow-up</h3>
+                        <p>Submitted messages are saved for authorized staff to review.</p>
+                        <p>Automatic email notifications are not configured.</p>
                     </div>
                 </div>
             </div>
+
+            <nav class="contact-help-links" aria-label="Helpful links">
+                <h2>Helpful links</h2>
+                <a href="<?php echo BASE_URL; ?>/public/properties.php"><span>Explore available houses</span><i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>
+                <a href="<?php echo BASE_URL; ?>/public/about.php"><span>About the platform</span><i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>
+                <a href="<?php echo BASE_URL; ?>/public/login.php"><span>Log in to your account</span><i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>
+                <a href="<?php echo BASE_URL; ?>/public/register.php"><span>Create an account</span><i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>
+            </nav>
         </aside>
 
-        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-            <div class="mb-6">
-                <p class="text-xs font-semibold uppercase tracking-[0.12em] text-gray-500 mb-2">Submit message</p>
-                <h2 class="text-2xl font-bold text-gray-900">Send an enquiry</h2>
+        <section class="contact-form-card" aria-labelledby="contact-form-heading">
+            <div class="contact-form-heading">
+                <p class="contact-eyebrow">Send a message</p>
+                <h2 id="contact-form-heading">Tell us what you need</h2>
+                <p>Fields marked <span aria-hidden="true">*</span> are required. Please don’t include passwords or sensitive account credentials.</p>
             </div>
 
-            <?php if (!empty($success)): ?>
-                <div class="bg-green-50 text-green-800 p-4 rounded-lg text-sm mb-6 border-l-4 border-green-500">
-                    <?php echo e($success); ?>
+            <?php if ($success !== ''): ?>
+                <div class="contact-feedback contact-feedback-success" role="status"><?php echo e($success); ?></div>
+            <?php endif; ?>
+            <?php if ($errors): ?>
+                <div class="contact-feedback contact-feedback-error" role="alert" tabindex="-1">
+                    <strong>Please review the following:</strong>
+                    <ul><?php foreach ($errors as $error): ?><li><?php echo e($error); ?></li><?php endforeach; ?></ul>
                 </div>
             <?php endif; ?>
 
-            <?php if (!empty($error)): ?>
-                <div class="bg-red-50 text-red-800 p-4 rounded-lg text-sm mb-6 border-l-4 border-red-500">
-                    <?php echo e($error); ?>
-                </div>
-            <?php endif; ?>
-
-            <form method="POST" class="space-y-5" id="contact-form" novalidate>
+            <form method="post" action="<?php echo BASE_URL; ?>/public/contact.php#contact-form" class="contact-form" id="contact-form">
                 <?php echo csrf_field(); ?>
-                <div>
-                    <label for="contact-name" class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                    <input id="contact-name" type="text" name="name" value="<?php echo e($form['name']); ?>" required class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary outline-none" aria-describedby="contact-name-help">
+                <div class="contact-honeypot" aria-hidden="true">
+                    <label for="contact-website">Leave this field empty</label>
+                    <input type="text" id="contact-website" name="website" value="" tabindex="-1" autocomplete="off">
                 </div>
-
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label for="contact-email" class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
-                        <input id="contact-email" type="email" name="email" value="<?php echo e($form['email']); ?>" required class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary outline-none">
+                <div class="contact-field">
+                    <label for="contact-name">Full name <span aria-hidden="true">*</span></label>
+                    <input type="text" id="contact-name" name="name" value="<?php echo e($form['name']); ?>" maxlength="120" autocomplete="name" required>
+                </div>
+                <div class="contact-form-row">
+                    <div class="contact-field">
+                        <label for="contact-email">Email address <span aria-hidden="true">*</span></label>
+                        <input type="email" id="contact-email" name="email" value="<?php echo e($form['email']); ?>" maxlength="150" autocomplete="email" required>
                     </div>
-                    <div>
-                        <label for="contact-phone" class="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
-                        <input id="contact-phone" type="tel" name="phone" value="<?php echo e($form['phone']); ?>" inputmode="tel" placeholder="0712345678 or +254712345678" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary outline-none" pattern="^(?:\\+?254|0)?[17]\\d{8}$|^\\+?\\d{10,15}$" aria-describedby="phone-help">
-                        <p id="phone-help" class="mt-1 text-xs text-gray-500">Use a valid Kenyan or international phone format.</p>
+                    <div class="contact-field">
+                        <label for="contact-phone">Phone number <span class="contact-optional">(optional)</span></label>
+                        <input type="tel" id="contact-phone" name="phone" value="<?php echo e($form['phone']); ?>" maxlength="30" inputmode="tel" autocomplete="tel" placeholder="+254 712 345 678" aria-describedby="contact-phone-help">
+                        <small id="contact-phone-help">Digits and common formatting such as spaces, +, hyphens, or parentheses are accepted.</small>
                     </div>
                 </div>
-
-                <div>
-                    <label for="contact-subject" class="block text-sm font-medium text-gray-700 mb-1">Subject</label>
-                    <select id="contact-subject" name="subject" required class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary outline-none">
-                        <option value="">Select a subject</option>
-                        <option value="Property enquiry" <?php echo $form['subject'] === 'Property enquiry' ? 'selected' : ''; ?>>Property enquiry</option>
-                        <option value="Tenancy support" <?php echo $form['subject'] === 'Tenancy support' ? 'selected' : ''; ?>>Tenancy support</option>
-                        <option value="Maintenance request" <?php echo $form['subject'] === 'Maintenance request' ? 'selected' : ''; ?>>Maintenance request</option>
-                        <option value="General enquiry" <?php echo $form['subject'] === 'General enquiry' ? 'selected' : ''; ?>>General enquiry</option>
+                <div class="contact-field">
+                    <label for="contact-subject">Enquiry category <span aria-hidden="true">*</span></label>
+                    <select id="contact-subject" name="subject" required>
+                        <option value="">Select a category</option>
+                        <?php foreach ($subjects as $subject): ?>
+                            <option value="<?php echo e($subject); ?>" <?php echo $form['subject'] === $subject ? 'selected' : ''; ?>><?php echo e($subject); ?></option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
-
-                <div>
-                    <label for="contact-message" class="block text-sm font-medium text-gray-700 mb-1">Message</label>
-                    <textarea id="contact-message" name="message" rows="5" required class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary outline-none" placeholder="Tell us how we can help you."><?php echo e($form['message']); ?></textarea>
+                <div class="contact-field">
+                    <label for="contact-message">Message <span aria-hidden="true">*</span></label>
+                    <textarea id="contact-message" name="message" rows="6" minlength="10" maxlength="5000" required placeholder="Tell us how we can help. Please avoid sharing passwords or sensitive account credentials."><?php echo e($form['message']); ?></textarea>
+                    <small>10–5,000 characters.</small>
                 </div>
-
-                <button type="submit" class="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-primary hover:bg-blue-800 text-white font-semibold px-6 py-3 rounded-lg text-sm transition shadow-sm">
-                    <i class="fa-solid fa-paper-plane"></i>
-                    Submit Message
-                </button>
+                <button class="contact-submit" type="submit"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i> Send enquiry</button>
             </form>
-        </div>
-    </div>
-</div>
-
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    const form = document.getElementById('contact-form');
-    if (!form) return;
-
-    const phoneField = document.getElementById('contact-phone');
-    if (phoneField) {
-        phoneField.addEventListener('input', function () {
-            phoneField.value = phoneField.value.replace(/[^0-9+\s-]/g, '');
-        });
-    }
-
-    form.addEventListener('submit', function (event) {
-        const phone = (phoneField ? phoneField.value : '').trim();
-        if (phone && !/^(?:\+?\d{10,15}|(?:\+?254|0)[17]\d{8})$/.test(phone.replace(/\s+/g, ''))) {
-            event.preventDefault();
-            const message = 'Please enter a valid phone number, for example 0712345678 or +254712345678.';
-            const existing = document.getElementById('phone-validation-message');
-            if (existing) existing.remove();
-            const note = document.createElement('div');
-            note.id = 'phone-validation-message';
-            note.className = 'mt-2 text-sm text-red-700';
-            note.textContent = message;
-            phoneField.parentNode.appendChild(note);
-            phoneField.focus();
-        }
-    });
-});
-</script>
+        </section>
+    </section>
+</main>
 
 <?php include __DIR__ . '/../includes/footer.php'; ?>
