@@ -33,7 +33,6 @@ if ($bedrooms !== '' && !in_array($bedrooms, ['0', '1', '2', '3', '4'], true)) {
 if ($sort !== '' && !in_array($sort, ['price_asc', 'price_desc', 'name'], true)) {
     $filterErrors[] = 'Choose a valid sort order.';
 }
-
 $validRent = static function ($value) {
     return $value === '' || (bool)preg_match('/^\d{1,9}(?:\.\d{1,2})?$/', $value);
 };
@@ -44,8 +43,25 @@ if ($min_rent !== '' && $max_rent !== '' && $validRent($min_rent) && $validRent(
     $filterErrors[] = 'The minimum rent cannot be greater than the maximum rent.';
 }
 
-$locationStmt = $db->query('SELECT estate AS location_name FROM locations UNION SELECT sub_county AS location_name FROM locations ORDER BY location_name');
+$locationStmt = $db->query("SELECT DISTINCT location_name FROM (
+    SELECT l.estate AS location_name FROM locations l
+    JOIN properties p ON p.location_id = l.id
+    JOIN units u ON u.property_id = p.id AND u.status = 'Vacant'
+    WHERE p.status = 'Active'
+    UNION
+    SELECT l.sub_county AS location_name FROM locations l
+    JOIN properties p ON p.location_id = l.id
+    JOIN units u ON u.property_id = p.id AND u.status = 'Vacant'
+    WHERE p.status = 'Active'
+) supported_locations ORDER BY location_name");
 $locations = $locationStmt->fetchAll(PDO::FETCH_COLUMN);
+$browseLocations = $db->query("SELECT l.estate, COUNT(DISTINCT p.id) AS property_count, COUNT(u.id) AS unit_count
+    FROM locations l
+    JOIN properties p ON p.location_id = l.id AND p.status = 'Active'
+    JOIN units u ON u.property_id = p.id AND u.status = 'Vacant'
+    GROUP BY l.estate
+    ORDER BY unit_count DESC, l.estate ASC
+    LIMIT 8")->fetchAll(PDO::FETCH_ASSOC);
 
 $where = ["p.status = 'Active'", "u.status = 'Vacant'"];
 $params = [];
@@ -81,7 +97,9 @@ if ($bedrooms !== '') {
 
 $pageSize = 9;
 $requestedPage = filter_var($_GET['page'] ?? 1, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: 1;
-$totalProperties = 0;
+$totalUnits = 0;
+$totalMatchingProperties = 0;
+$availableUnitInventory = (int)$db->query("SELECT COUNT(*) FROM properties p JOIN units u ON u.property_id = p.id WHERE p.status = 'Active' AND u.status = 'Vacant'")->fetchColumn();
 $properties = [];
 $totalPages = 0;
 $page = 1;
@@ -90,27 +108,29 @@ $resultEnd = 0;
 
 if (!$filterErrors) {
     $filterSql = implode(' AND ', $where);
-    $countStmt = $db->prepare("SELECT COUNT(DISTINCT p.id) FROM properties p JOIN locations l ON p.location_id = l.id JOIN units u ON p.id = u.property_id WHERE {$filterSql}");
+    $countStmt = $db->prepare("SELECT COUNT(DISTINCT u.id) FROM properties p JOIN locations l ON p.location_id = l.id JOIN units u ON p.id = u.property_id WHERE {$filterSql}");
     $countStmt->execute($params);
-    $totalProperties = (int)$countStmt->fetchColumn();
-    $totalPages = (int)ceil($totalProperties / $pageSize);
+    $totalUnits = (int)$countStmt->fetchColumn();
+    $propertyCountStmt = $db->prepare("SELECT COUNT(DISTINCT p.id) FROM properties p JOIN locations l ON p.location_id = l.id JOIN units u ON p.id = u.property_id WHERE {$filterSql}");
+    $propertyCountStmt->execute($params);
+    $totalMatchingProperties = (int)$propertyCountStmt->fetchColumn();
+    $totalPages = (int)ceil($totalUnits / $pageSize);
     $page = $totalPages > 0 ? min($requestedPage, $totalPages) : 1;
     $offset = ($page - 1) * $pageSize;
 
     $sortSql = [
-        'price_asc' => 'min_rent ASC, p.name ASC',
-        'price_desc' => 'min_rent DESC, p.name ASC',
-        'name' => 'p.name ASC',
-    ][$sort] ?? 'p.created_at DESC, p.name ASC';
+        'price_asc' => 'u.monthly_rent ASC, p.name ASC, u.unit_number ASC',
+        'price_desc' => 'u.monthly_rent DESC, p.name ASC, u.unit_number ASC',
+        'name' => 'p.name ASC, u.house_type ASC, u.unit_number ASC',
+    ][$sort] ?? 'p.created_at DESC, p.name ASC, u.unit_number ASC';
 
-    $query = "SELECT p.*, l.estate, l.sub_county, MIN(u.monthly_rent) AS min_rent,
-                     COUNT(DISTINCT u.id) AS available_units,
-                     GROUP_CONCAT(DISTINCT u.house_type ORDER BY u.house_type SEPARATOR ', ') AS house_types
+    $query = "SELECT DISTINCT u.id AS unit_id, p.*, l.estate, l.sub_county,
+                     u.unit_number, u.house_type, u.bedrooms, u.bathrooms,
+                     u.monthly_rent, u.deposit, u.status AS unit_status, u.description AS unit_description
               FROM properties p
               JOIN locations l ON p.location_id = l.id
               JOIN units u ON p.id = u.property_id
               WHERE {$filterSql}
-              GROUP BY p.id, l.estate, l.sub_county
               ORDER BY {$sortSql}
               LIMIT ? OFFSET ?";
     $stmt = $db->prepare($query);
@@ -121,8 +141,8 @@ if (!$filterErrors) {
     $stmt->bindValue(count($params) + 2, $offset, PDO::PARAM_INT);
     $stmt->execute();
     $properties = $stmt->fetchAll();
-    $resultStart = $totalProperties > 0 ? $offset + 1 : 0;
-    $resultEnd = min($offset + count($properties), $totalProperties);
+    $resultStart = $totalUnits > 0 ? $offset + 1 : 0;
+    $resultEnd = min($offset + count($properties), $totalUnits);
 }
 
 $queryFilters = array_filter([
@@ -136,8 +156,15 @@ $queryFilters = array_filter([
 ], static function ($value) {
     return $value !== '';
 });
+$activeFilters = [];
+if ($location !== '') $activeFilters[] = ['Neighbourhood', $location];
+if ($property_type !== '') $activeFilters[] = ['Property', $property_type];
+if ($house_type !== '') $activeFilters[] = ['Home type', $house_type];
+if ($min_rent !== '') $activeFilters[] = ['Minimum rent', 'KSh ' . number_format((float)$min_rent)];
+if ($max_rent !== '') $activeFilters[] = ['Maximum rent', 'KSh ' . number_format((float)$max_rent)];
+if ($bedrooms !== '') $activeFilters[] = ['Bedrooms', $bedrooms === '0' ? 'Bedsitter / studio' : $bedrooms . '+'];
 $page_title = 'Explore Available Houses';
-$page_description = 'Explore current rental properties and vacant units, with filters for Nairobi locations, house types, and monthly rent.';
+$page_description = 'Explore individually listed vacant rental units across active Nairobi properties, with filters for location, home type, bedrooms, and monthly rent.';
 include __DIR__ . '/../includes/header.php';
 include __DIR__ . '/../includes/navbar.php';
 ?>
@@ -145,14 +172,16 @@ include __DIR__ . '/../includes/navbar.php';
 <main id="main-content" class="catalog-page">
     <div class="site-container catalog-container">
         <header class="catalog-intro">
-            <p class="eyebrow">Find your next home</p>
-            <h1>Explore <span class="heading-accent">available houses</span></h1>
-            <p>Browse current listings and narrow your search by neighbourhood, home type, and monthly rent. Availability shown here is based on vacant units recorded in the system.</p>
+            <p class="eyebrow"><i class="fa-solid fa-location-dot" aria-hidden="true"></i> Nairobi rentals, made easier</p>
+            <h1>Find Your <span class="heading-accent">Perfect Home</span></h1>
+            <p>Explore real property records, compare current rent and unit details, and request a viewing directly with the management team.</p>
         </header>
 
-        <?php include __DIR__ . '/../includes/property-gallery.php'; ?>
-
         <form method="get" action="<?php echo BASE_URL; ?>/public/properties.php" class="catalog-filters" aria-label="Filter available properties">
+            <div class="catalog-filter-heading">
+                <div><span class="catalog-filter-icon" aria-hidden="true"><i class="fa-solid fa-sliders"></i></span><div><h2>Search homes</h2><p>Choose the details that matter to you.</p></div></div>
+                <?php if ($activeFilters): ?><span class="catalog-active-count"><?php echo count($activeFilters); ?> active <?php echo count($activeFilters) === 1 ? 'filter' : 'filters'; ?></span><?php endif; ?>
+            </div>
             <div class="catalog-filter-grid">
                 <label>
                     <span>Neighbourhood or estate</span>
@@ -213,9 +242,30 @@ include __DIR__ . '/../includes/navbar.php';
             </div>
             <div class="catalog-filter-actions">
                 <a class="catalog-clear-link" href="<?php echo BASE_URL; ?>/public/properties.php">Clear all filters</a>
-                <button class="button button-primary" type="submit"><i class="fa-solid fa-sliders" aria-hidden="true"></i> Apply filters</button>
+                <button class="button button-primary" type="submit"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> Search homes</button>
             </div>
         </form>
+
+        <?php if ($activeFilters): ?>
+            <div class="catalog-active-filters" aria-label="Active filters">
+                <span>Filtered by</span>
+                <?php foreach ($activeFilters as [$filterLabel, $filterValue]): ?><span class="catalog-filter-chip"><strong><?php echo e($filterLabel); ?>:</strong> <?php echo e($filterValue); ?></span><?php endforeach; ?>
+                <a href="<?php echo BASE_URL; ?>/public/properties.php">Reset</a>
+            </div>
+        <?php endif; ?>
+
+        <?php if ($browseLocations): ?>
+            <nav class="catalog-location-browse" aria-label="Browse available homes by neighbourhood">
+                <div><p class="eyebrow">Explore Nairobi</p><h2>Browse by neighbourhood</h2></div>
+                <div class="catalog-location-links">
+                    <?php foreach ($browseLocations as $browseLocation): ?>
+                        <a href="<?php echo BASE_URL; ?>/public/properties.php?<?php echo e(http_build_query(['location' => $browseLocation['estate']])); ?>">
+                            <?php echo e($browseLocation['estate']); ?><span><?php echo (int)$browseLocation['unit_count']; ?> <?php echo (int)$browseLocation['unit_count'] === 1 ? 'unit' : 'units'; ?></span>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+            </nav>
+        <?php endif; ?>
 
         <?php if ($filterErrors): ?>
             <div class="catalog-message catalog-message-error" role="alert">
@@ -228,17 +278,23 @@ include __DIR__ . '/../includes/navbar.php';
             <div class="catalog-results-heading">
                 <div>
                     <p class="eyebrow">The listings</p>
-                    <h2 id="catalog-results-heading">Homes to explore</h2>
+                    <h2 id="catalog-results-heading">Available rental units</h2>
                 </div>
-                <?php if (!$filterErrors): ?><p class="catalog-result-count">Showing <?php echo $resultStart; ?>–<?php echo $resultEnd; ?> of <?php echo $totalProperties; ?> <?php echo $totalProperties === 1 ? 'property' : 'properties'; ?></p><?php endif; ?>
+                <?php if (!$filterErrors): ?><p class="catalog-result-count">Showing <?php echo $resultStart; ?>–<?php echo $resultEnd; ?> of <?php echo $totalUnits; ?> available <?php echo $totalUnits === 1 ? 'unit' : 'units'; ?> across <?php echo $totalMatchingProperties; ?> <?php echo $totalMatchingProperties === 1 ? 'property' : 'properties'; ?></p><?php endif; ?>
             </div>
 
             <?php if (!$filterErrors && !$properties): ?>
                 <div class="catalog-empty-state">
                     <span class="catalog-empty-icon" aria-hidden="true"><i class="fa-solid fa-magnifying-glass"></i></span>
-                    <h3>No matching homes right now</h3>
-                    <p>Try a different neighbourhood or broaden the rent and house-type filters. Only active properties with vacant units appear here.</p>
+                    <?php if ($availableUnitInventory === 0): ?>
+                        <h3>No vacant rental units right now</h3>
+                        <p>There are currently no units recorded as vacant in active properties. Please check back later or contact our team for help with your search.</p>
+                        <a class="button button-primary" href="<?php echo BASE_URL; ?>/public/contact.php?subject=<?php echo rawurlencode('Property enquiry'); ?>">Contact our team</a>
+                    <?php else: ?>
+                        <h3>No matching available units</h3>
+                        <p>There are <?php echo $availableUnitInventory; ?> vacant <?php echo $availableUnitInventory === 1 ? 'unit' : 'units'; ?> in the system, but none match these filters. Try another neighbourhood or broaden your rent and home-type selections.</p>
                     <a class="button button-primary" href="<?php echo BASE_URL; ?>/public/properties.php">Browse all available homes</a>
+                    <?php endif; ?>
                 </div>
             <?php elseif (!$filterErrors): ?>
                 <div class="catalog-property-grid">
@@ -248,28 +304,39 @@ include __DIR__ . '/../includes/navbar.php';
                         $imageFile = $imagePath !== '' ? dirname(__DIR__) . '/' . $imagePath : '';
                         $hasPropertyImage = $imagePath !== '' && is_file($imageFile);
                         $imageUrl = $hasPropertyImage ? BASE_URL . '/' . e($imagePath) : BASE_URL . '/' . e(sample_property_image($property['id']));
+                        $detailsUrl = BASE_URL . '/public/property-details.php?' . http_build_query(['id' => (int)$property['id'], 'unit' => (int)$property['unit_id']]);
                         ?>
-                        <article class="catalog-property-card">
-                            <a class="catalog-property-image" href="<?php echo BASE_URL; ?>/public/property-details.php?id=<?php echo (int)$property['id']; ?>" aria-label="View details for <?php echo e($property['name']); ?>">
+                        <article class="catalog-property-card" data-unit-id="<?php echo (int)$property['unit_id']; ?>">
+                            <a class="catalog-property-image" href="<?php echo e($detailsUrl); ?>" aria-label="View unit <?php echo e($property['unit_number']); ?> details at <?php echo e($property['name']); ?>">
                                 <img src="<?php echo $imageUrl; ?>" alt="<?php echo $hasPropertyImage ? 'Property image for ' . e($property['name']) : 'Illustrative residential image; an actual property photo was not provided'; ?>" width="840" height="560" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='<?php echo BASE_URL; ?>/assets/modern-residential-building.webp';this.alt='Illustrative residential image; an actual property photo was not provided';">
-                                <span class="catalog-availability"><i aria-hidden="true"></i> Available</span>
+                                <span class="catalog-availability"><i aria-hidden="true"></i>Vacant now</span>
                             </a>
                             <div class="catalog-property-body">
                                 <p class="catalog-property-type"><?php echo e($property['property_type']); ?></p>
-                                <h3><a href="<?php echo BASE_URL; ?>/public/property-details.php?id=<?php echo (int)$property['id']; ?>"><?php echo e($property['name']); ?></a></h3>
+                                <h3><a href="<?php echo e($detailsUrl); ?>"><?php echo e($property['name']); ?></a></h3>
                                 <p class="catalog-property-location"><i class="fa-solid fa-location-dot" aria-hidden="true"></i> <?php echo e($property['estate'] . ', ' . $property['sub_county']); ?></p>
                                 <div class="catalog-property-facts">
-                                    <span><i class="fa-solid fa-door-open" aria-hidden="true"></i> <?php echo e($property['house_types']); ?></span>
-                                    <span><i class="fa-solid fa-key" aria-hidden="true"></i> <?php echo (int)$property['available_units']; ?> vacant <?php echo (int)$property['available_units'] === 1 ? 'unit' : 'units'; ?></span>
+                                    <span><i class="fa-solid fa-door-open" aria-hidden="true"></i> Unit <?php echo e($property['unit_number']); ?> · <?php echo e($property['house_type']); ?></span>
+                                    <?php if ($property['bedrooms'] !== null): ?><span><i class="fa-solid fa-bed" aria-hidden="true"></i> <?php echo (int)$property['bedrooms']; ?> <?php echo (int)$property['bedrooms'] === 1 ? 'bedroom' : 'bedrooms'; ?></span><?php endif; ?>
+                                    <?php if ($property['bathrooms'] !== null): ?><span><i class="fa-solid fa-bath" aria-hidden="true"></i> <?php echo (int)$property['bathrooms']; ?> <?php echo (int)$property['bathrooms'] === 1 ? 'bathroom' : 'bathrooms'; ?></span><?php endif; ?>
+                                    <span><i class="fa-solid fa-circle-check" aria-hidden="true"></i> <?php echo e($property['unit_status']); ?></span>
                                 </div>
+                                <?php
+                                $cardDescription = trim((string)($property['unit_description'] ?? '')) !== ''
+                                    ? $property['unit_description']
+                                    : ($property['description'] ?? '');
+                                if (trim((string)$cardDescription) !== ''):
+                                ?>
+                                    <p class="catalog-property-description"><?php echo e(function_exists('mb_strimwidth') ? mb_strimwidth(strip_tags($cardDescription), 0, 130, '…', 'UTF-8') : substr(strip_tags($cardDescription), 0, 127) . '...'); ?></p>
+                                <?php endif; ?>
                                 <?php if (trim((string)($property['amenities'] ?? '')) !== ''): ?>
                                     <p class="catalog-property-amenities"><i class="fa-solid fa-star" aria-hidden="true"></i> <?php echo e($property['amenities']); ?></p>
                                 <?php endif; ?>
                                 <div class="catalog-property-footer">
-                                    <p><strong><?php echo format_currency($property['min_rent']); ?></strong><span>From / month</span></p>
-                                    <a class="catalog-details-link" href="<?php echo BASE_URL; ?>/public/property-details.php?id=<?php echo (int)$property['id']; ?>">View details <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>
+                                    <p><strong><?php echo format_currency($property['monthly_rent']); ?></strong><span>Per month</span></p>
+                                    <a class="catalog-details-link" href="<?php echo e($detailsUrl); ?>">View details <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>
                                 </div>
-                                <a class="catalog-viewing-link" href="<?php echo BASE_URL; ?>/public/property-details.php?id=<?php echo (int)$property['id']; ?>#request-viewing">Schedule a viewing</a>
+                                <a class="catalog-viewing-link" href="<?php echo e($detailsUrl); ?>#request-viewing">Schedule a viewing</a>
                             </div>
                         </article>
                     <?php endforeach; ?>
@@ -288,6 +355,22 @@ include __DIR__ . '/../includes/navbar.php';
                     </nav>
                 <?php endif; ?>
             <?php endif; ?>
+        </section>
+
+        <section class="catalog-trust-section" aria-labelledby="catalog-trust-heading">
+            <div><p class="eyebrow">A clearer way to find home</p><h2 id="catalog-trust-heading">Search with confidence</h2></div>
+            <div class="catalog-trust-grid">
+                <article><span aria-hidden="true"><i class="fa-solid fa-clipboard-check"></i></span><h3>Recorded property details</h3><p>Browse descriptions, locations and unit information entered in the system.</p></article>
+                <article><span aria-hidden="true"><i class="fa-solid fa-magnifying-glass"></i></span><h3>Convenient search</h3><p>Filter by neighbourhood, home type, bedrooms and monthly rent.</p></article>
+                <article><span aria-hidden="true"><i class="fa-regular fa-calendar-check"></i></span><h3>Easy viewing requests</h3><p>Choose an available unit and send a preferred date to management.</p></article>
+            </div>
+        </section>
+
+        <?php include __DIR__ . '/../includes/property-gallery.php'; ?>
+
+        <section class="catalog-cta">
+            <div><p class="eyebrow">Your next step</p><h2>Found a home worth seeing?</h2><p>Explore a listing’s current unit details and request a viewing when a vacancy is available.</p></div>
+            <a class="button button-primary" href="#catalog-results-heading">Explore the listings <i class="fa-solid fa-arrow-up" aria-hidden="true"></i></a>
         </section>
     </div>
 </main>

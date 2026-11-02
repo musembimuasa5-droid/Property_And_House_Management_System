@@ -21,6 +21,17 @@ $subjects = [
     'Platform support',
     'General enquiry',
 ];
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    $requestedSubject = isset($_GET['subject']) && is_string($_GET['subject']) ? $_GET['subject'] : '';
+    if (in_array($requestedSubject, $subjects, true)) {
+        $form['subject'] = $requestedSubject;
+    }
+    $propertyName = isset($_GET['property']) && is_string($_GET['property']) ? trim($_GET['property']) : '';
+    if ($propertyName !== '') {
+        $propertyName = function_exists('mb_substr') ? mb_substr($propertyName, 0, 150) : substr($propertyName, 0, 150);
+        $form['message'] = 'I would like to enquire about ' . $propertyName . '.';
+    }
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $postValue = static function ($key) {

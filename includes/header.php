@@ -10,6 +10,7 @@ require_once __DIR__ . '/../config/config.php';
     <meta property="og:title" content="<?php echo e($page_title ?? APP_NAME); ?>">
     <meta property="og:description" content="<?php echo e($page_description ?? 'Property and house management for Nairobi.'); ?>">
     <meta property="og:type" content="website">
+    <link rel="icon" type="image/png" href="<?php echo BASE_URL; ?>/assets/property-management-logo.png">
     <title><?php echo isset($page_title) ? $page_title . ' - ' . APP_NAME : APP_NAME; ?></title>
     <script>
         window.tailwind = window.tailwind || {};

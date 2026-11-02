@@ -20,10 +20,16 @@ Seeded user rows use a bundled development bcrypt hash. The original seed commen
 
 ## Current feature scope
 
-- Public property search and property viewing requests.
-- Tenant account registration, portal, payment history, rent charges, utility readings, maintenance, complaints, profile, lease list, and notices.
-- Management dashboard metrics and payment recording API.
-- M-Pesa/Daraja is not integrated; payment methods are recorded manually.
+- Public property discovery with database-backed neighbourhood, property type, unit type, bedroom, and rent filters; each result represents one genuinely vacant unit in an active property, with unit-level pagination, responsive details, contextual contact enquiries, and database-backed viewing requests.
+- Tenant registration and portal workflows for profile updates, leases and documents, rent charges, payment history, notices, complaints, and maintenance requests with one optional JPG/PNG image (the existing schema stores one image path per request).
+- Super Admin property and unit creation, editing, search/filtering, pagination, status changes, safe archival, and deletion only when no linked records exist. Landlords can create and manage only the properties/units linked to their own landlord profile.
+- Caretaker-assigned maintenance, meter readings, viewing feedback, incident reports, and recorded expenses.
+- Management dashboards and a payment-recording API. These do not yet provide the complete lease, payment reversal, or portfolio-scoped manager workflows requested for a production rollout.
+- M-Pesa/Daraja is not integrated; payment methods are recorded manually. Google sign-in is also not configured and remains disabled.
+
+Property/unit changes, tenant maintenance submissions, and contact-message status changes use server-side validation, CSRF checks, prepared statements, and audit records. Property images use validated JPG/PNG uploads; replacement/removal preserves images still referenced by another property. Permanent deletion is blocked when historical or operational records are linked.
+
+The People Directory supports Super Admin-managed tenant, landlord, caretaker, manager, and accountant accounts, including role/status changes, password resets, and a CSRF-protected delete action. Unlinked accounts can be deleted; accounts with property, lease, payment, maintenance, complaint, document, notification, assignment, or audit history are deactivated instead. The current administrator and last active Super Admin are protected. The application still needs manager tenancy/finance operations, additional caretaker inspection workflows, tenant payment/receipt workflows, property-portfolio assignment for managers, and dedicated reporting/settings/terms/privacy pages. Review those requirements before treating the system as production-complete.
 
 The `database/schema.sql` file defines the database structure. Existing databases require a reviewed migration before schema changes; importing the schema will not alter their current tables.
 
@@ -38,3 +44,11 @@ The optimized WebP images in `assets/` are licensed illustrations from Unsplash.
 - `modern-home-interior.webp` — [Unsplash photo](https://images.unsplash.com/photo-1600607687939-ce8a6c25118c)
 
 These images are used under the [Unsplash License](https://unsplash.com/license). Photographer attribution is appreciated but not required by the license.
+
+## Illustrative testimonial portraits
+
+The homepage testimonial cards use local sample portraits, not photos of verified customers. They are illustrative assets from Unsplash and are used under the [Unsplash License](https://unsplash.com/license).
+
+- `testimonial-wanjiku.jpg` — [Unsplash photo](https://images.unsplash.com/photo-1494790108377-be9c29b29330)
+- `testimonial-david.jpg` — [Unsplash photo](https://images.unsplash.com/photo-1500648767791-00dcc994a43e)
+- `testimonial-akinyi.jpg` — [Unsplash photo](https://images.unsplash.com/photo-1531123897727-8f129e1688ce)

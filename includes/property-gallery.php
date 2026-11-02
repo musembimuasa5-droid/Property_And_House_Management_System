@@ -17,7 +17,7 @@ $galleryPhotos = [
     <div class="sample-gallery-heading"><div><p class="eyebrow">A feel for the homes</p><h2 id="sample-gallery-title">A Glimpse of Nairobi Living</h2></div><p>Representative photos. Check individual listings for current availability and property details.</p></div>
     <div class="sample-gallery-grid">
       <?php foreach ($galleryPhotos as [$photo, $caption]): ?>
-        <figure class="sample-gallery-item"><img src="<?php echo BASE_URL . '/' . e($photo); ?>" alt="Illustrative <?php echo e(strtolower($caption)); ?>" width="840" height="560" loading="lazy" decoding="async"><figcaption><?php echo e($caption); ?></figcaption></figure>
+        <figure class="sample-gallery-item"><img src="<?php echo BASE_URL . '/' . e($photo); ?>" alt="<?php echo e($caption); ?>" width="840" height="560" loading="lazy" decoding="async"><figcaption><?php echo e($caption); ?></figcaption></figure>
       <?php endforeach; ?>
     </div>
   </div>

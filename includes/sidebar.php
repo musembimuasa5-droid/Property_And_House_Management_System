@@ -12,7 +12,7 @@ function sidebarLink($path, $icon, $label) {
 }
 ?>
 <aside id="sidebar" class="bg-secondary text-gray-300 w-64 space-y-6 py-7 px-2 absolute inset-y-0 left-0 transform -translate-x-full lg:relative lg:translate-x-0 transition duration-200 ease-in-out z-20 flex flex-col">
-<div class="px-4 flex items-center space-x-2 text-white"><img src="<?php echo BASE_URL; ?>/assets/houselogo.avif" alt="" class="sidebar-brand-logo"><span class="text-lg font-bold"><?php echo e(APP_NAME); ?></span></div>
+<div class="px-4 flex items-center space-x-2 text-white"><img src="<?php echo BASE_URL; ?>/assets/property-management-logo.png" alt="" class="sidebar-brand-logo"><span class="text-lg font-bold"><?php echo e(APP_NAME); ?></span></div>
 <nav class="flex-1 space-y-1 px-2" aria-label="<?php echo e($role); ?> navigation">
 <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 pt-4 pb-2"><?php echo e($role); ?> workspace</div>
 <?php if ($currentUser) sidebarLink($dashboardPath, 'fa-chart-pie', 'Dashboard'); ?>
@@ -21,6 +21,7 @@ function sidebarLink($path, $icon, $label) {
 <?php if ($role === 'Super Admin') sidebarLink('admin/contact_messages.php', 'fa-envelope-open-text', 'Contact Messages'); ?>
 <?php sidebarLink('public/properties.php', 'fa-building', 'Property Directory'); ?>
 <?php elseif ($role === 'Landlord'): ?>
+<?php sidebarLink('landlord/dashboard.php#my-properties', 'fa-building', 'My Properties'); ?>
 <?php sidebarLink('public/properties.php', 'fa-building', 'Public Directory'); ?>
 <?php elseif ($role === 'Caretaker'): ?>
 <?php sidebarLink('caretaker/dashboard.php#assigned-requests', 'fa-screwdriver-wrench', 'Assigned Requests'); ?>
