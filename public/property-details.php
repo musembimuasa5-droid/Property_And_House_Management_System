@@ -32,6 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$success_msg && $property['status'] === 'Active' && !empty($name) && !empty($phone) && filter_var($email, FILTER_VALIDATE_EMAIL) && !empty($date) && $date >= date('Y-m-d') && !empty($time)) {
         $req = $db->prepare("INSERT INTO viewing_requests (property_id, visitor_name, visitor_phone, visitor_email, preferred_date, preferred_time, message) VALUES (?, ?, ?, ?, ?, ?, ?)");
         $req->execute([$property_id, $name, $phone, $email, $date, $time, $message]);
+        notify_roles($db, MANAGEMENT_ROLES, 'New viewing request', "$name ($phone) wants to view {$property['name']} on " . format_date($date) . ' at ' . substr($time, 0, 5) . '.');
         $success_msg = 'Viewing request submitted successfully! Management will contact you.';
     }
 }

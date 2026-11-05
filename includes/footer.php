@@ -13,6 +13,7 @@ $isPublicPage = strpos($_SERVER['SCRIPT_NAME'] ?? '', '/public/') !== false || b
 </footer>
 <?php else: ?>
 <footer class="app-footer mt-auto"><div class="max-w-7xl mx-auto px-4 text-center">&copy; <?php echo date('Y'); ?> <?php echo e(APP_NAME); ?>. All rights reserved.</div></footer>
+<?php if (!empty($app_shell_open)) echo '</div></div>'; ?>
 <?php endif; ?>
 <script src="<?php echo BASE_URL; ?>/assets/app.js" defer></script>
 </body>

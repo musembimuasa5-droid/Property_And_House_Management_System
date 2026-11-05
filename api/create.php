@@ -3,6 +3,7 @@ require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../includes/finance.php';
 
 header('Content-Type: application/json');
 
@@ -59,9 +60,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $stmt = $db->prepare("INSERT INTO payments (receipt_number, tenant_id, property_id, unit_id, lease_id, amount, payment_method, transaction_reference, payment_date, payment_period, recorded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?)");
         $stmt->execute([$receipt, $tenant_id, $lease['property_id'], $lease['unit_id'], $lease_id, $amount, $method, $reference, $period, $recorded_by]);
+        $payment_id = (int)$db->lastInsertId();
+        recalculate_lease_balances($db, (int)$lease_id);
 
         $db->commit();
-        logAuditAction('RECORD_PAYMENT', 'payments', $db->lastInsertId(), "Recorded payment of {$amount} for tenant {$tenant_id}");
+        logAuditAction('RECORD_PAYMENT', 'payments', $payment_id, "Recorded payment of {$amount} for tenant {$tenant_id}");
 
         echo json_encode(['success' => true, 'message' => 'Payment recorded successfully', 'receipt' => $receipt]);
     } catch (Exception $e) {

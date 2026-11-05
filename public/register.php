@@ -33,19 +33,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$role) { $error = 'Tenant registration is temporarily unavailable.'; }
             $role_id = $role['id'] ?? 0;
 
+            // A profile staff already created is linked when the national ID and email both match.
+            $existing_stmt = $db->prepare('SELECT id, user_id, email FROM tenants WHERE national_id = ?');
+            $existing_stmt->execute([$national_id]);
+            $existing = $existing_stmt->fetch();
+            if (!$error && $existing && ($existing['user_id'] || strcasecmp($existing['email'], $email) !== 0)) {
+                $error = 'This national ID is already registered. Contact management if you need help signing in.';
+            }
+
             if (!$error) {
             $hash = password_hash($password, PASSWORD_DEFAULT);
-            $db->beginTransaction();
+            try {
+                $db->beginTransaction();
 
-            $user_stmt = $db->prepare("INSERT INTO users (role_id, full_name, email, phone, password_hash, status) VALUES (?, ?, ?, ?, ?, 'Active')");
-            $user_stmt->execute([$role_id, $full_name, $email, $phone, $hash]);
-            $user_id = $db->lastInsertId();
+                $user_stmt = $db->prepare("INSERT INTO users (role_id, full_name, email, phone, password_hash, status) VALUES (?, ?, ?, ?, ?, 'Active')");
+                $user_stmt->execute([$role_id, $full_name, $email, $phone, $hash]);
+                $user_id = $db->lastInsertId();
 
-            $tenant_stmt = $db->prepare("INSERT INTO tenants (user_id, full_name, phone, email, national_id, gender, status) VALUES (?, ?, ?, ?, ?, ?, 'Active')");
-            $tenant_stmt->execute([$user_id, $full_name, $phone, $email, $national_id, $gender]);
+                if ($existing) {
+                    $db->prepare('UPDATE tenants SET user_id = ? WHERE id = ? AND user_id IS NULL')->execute([$user_id, $existing['id']]);
+                } else {
+                    $tenant_stmt = $db->prepare("INSERT INTO tenants (user_id, full_name, phone, email, national_id, gender, status) VALUES (?, ?, ?, ?, ?, ?, 'Active')");
+                    $tenant_stmt->execute([$user_id, $full_name, $phone, $email, $national_id, $gender]);
+                }
 
-            $db->commit();
-            $success = 'Account created successfully! You can now log in.';
+                $db->commit();
+                $success = $existing ? 'Account created and linked to your tenancy. You can now log in.' : 'Account created successfully! You can now log in.';
+            } catch (PDOException $e) {
+                if ($db->inTransaction()) $db->rollBack();
+                error_log('Tenant registration failed: ' . $e->getMessage());
+                $error = 'Registration could not be completed. Check your details or contact management.';
+            }
             }
         }
     }

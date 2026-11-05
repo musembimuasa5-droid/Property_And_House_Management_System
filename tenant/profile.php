@@ -34,14 +34,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $tenant) {
 }
 
 $page_title = 'My Profile';
-include __DIR__ . '/../includes/header.php';
+include __DIR__ . '/../includes/layout_top.php';
 ?>
-
-<div class="flex h-screen bg-gray-50 overflow-hidden">
-    <?php include __DIR__ . '/../includes/sidebar.php'; ?>
-    <div class="flex-1 flex flex-col overflow-y-auto">
-        <?php include __DIR__ . '/../includes/navbar.php'; ?>
-        <main class="flex-1 p-6 space-y-6">
             <h1 class="text-2xl font-bold text-gray-900">Tenant Profile Settings</h1>
             <?php if ($error): ?><div class="bg-red-50 text-red-800 p-3 rounded-lg text-sm"><?php echo e($error); ?></div><?php endif; ?>
             <?php if (!empty($success)): ?><div class="bg-green-50 text-green-800 p-3 rounded-lg text-sm"><?php echo e($success); ?></div><?php endif; ?>
@@ -68,7 +62,4 @@ include __DIR__ . '/../includes/header.php';
                     <button type="submit" class="bg-primary text-white font-semibold px-4 py-2 rounded-lg text-sm">Save Changes</button>
                 </form>
             </div>
-        </main>
-        <?php include __DIR__ . '/../includes/footer.php'; ?>
-    </div>
-</div>
+<?php include __DIR__ . '/../includes/layout_bottom.php'; ?>
