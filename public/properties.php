@@ -65,7 +65,8 @@ $browseLocations = $db->query("SELECT l.estate, COUNT(DISTINCT p.id) AS property
 
 $where = ["p.status = 'Active'", "u.status = 'Vacant'"];
 $params = [];
-if ($location !== '') {
+
+if (!empty($location)) {
     $where[] = '(l.estate = ? OR l.sub_county = ?)';
     $params[] = $location;
     $params[] = $location;
@@ -182,63 +183,23 @@ include __DIR__ . '/../includes/navbar.php';
                 <div><span class="catalog-filter-icon" aria-hidden="true"><i class="fa-solid fa-sliders"></i></span><div><h2>Search homes</h2><p>Choose the details that matter to you.</p></div></div>
                 <?php if ($activeFilters): ?><span class="catalog-active-count"><?php echo count($activeFilters); ?> active <?php echo count($activeFilters) === 1 ? 'filter' : 'filters'; ?></span><?php endif; ?>
             </div>
-            <div class="catalog-filter-grid">
-                <label>
-                    <span>Neighbourhood or estate</span>
-                    <select name="location">
-                        <option value="">All locations</option>
-                        <?php if ($location !== '' && !in_array($location, $locations, true)): ?>
-                            <option value="<?php echo e($location); ?>" selected><?php echo e($location); ?></option>
-                        <?php endif; ?>
-                        <?php foreach ($locations as $locationOption): ?>
-                            <option value="<?php echo e($locationOption); ?>" <?php echo $location === $locationOption ? 'selected' : ''; ?>><?php echo e($locationOption); ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </label>
-                <label>
-                    <span>Property type</span>
-                    <select name="type">
-                        <option value="">Any property type</option>
-                        <?php foreach (PROPERTY_TYPES as $typeOption): ?>
-                            <option value="<?php echo e($typeOption); ?>" <?php echo $property_type === $typeOption ? 'selected' : ''; ?>><?php echo e($typeOption); ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </label>
-                <label>
-                    <span>House type</span>
-                    <select name="house_type">
-                        <option value="">Any house type</option>
-                        <?php foreach (UNIT_TYPES as $unitType): ?>
-                            <option value="<?php echo e($unitType); ?>" <?php echo $house_type === $unitType ? 'selected' : ''; ?>><?php echo e($unitType); ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </label>
-                <label>
-                    <span>Minimum rent (KSh/month)</span>
-                    <input type="number" name="min_rent" min="0" step="0.01" value="<?php echo e($min_rent); ?>" placeholder="No minimum">
-                </label>
-                <label>
-                    <span>Maximum rent (KSh/month)</span>
-                    <input type="number" name="max_rent" min="0" step="0.01" value="<?php echo e($max_rent); ?>" placeholder="No maximum">
-                </label>
-                <label>
-                    <span>Bedrooms</span>
-                    <select name="bedrooms">
-                        <option value="">Any number</option>
-                        <?php foreach ([0, 1, 2, 3, 4] as $bedroomCount): ?>
-                            <option value="<?php echo $bedroomCount; ?>" <?php echo $bedrooms === (string)$bedroomCount ? 'selected' : ''; ?>><?php echo $bedroomCount === 0 ? 'Bedsitter or studio' : $bedroomCount . '+'; ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </label>
-                <label>
-                    <span>Sort by</span>
-                    <select name="sort">
-                        <option value="">Recently added</option>
-                        <option value="price_asc" <?php echo $sort === 'price_asc' ? 'selected' : ''; ?>>Price: low to high</option>
-                        <option value="price_desc" <?php echo $sort === 'price_desc' ? 'selected' : ''; ?>>Price: high to low</option>
-                        <option value="name" <?php echo $sort === 'name' ? 'selected' : ''; ?>>Property name</option>
-                    </select>
-                </label>
+            <div>
+                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Estate / Location</label>
+                <select name="location" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary outline-none">
+                    <option value="">All Locations</option>
+                    <?php foreach (NAIROBI_ESTATES as $est): ?>
+                        <option value="<?php echo $est; ?>" <?php echo $location === $est ? 'selected' : ''; ?>><?php echo $est; ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">House Type</label>
+                <select name="house_type" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary outline-none">
+                    <option value="">All Types</option>
+                    <?php foreach (UNIT_TYPES as $ut): ?>
+                        <option value="<?php echo $ut; ?>" <?php echo $house_type === $ut ? 'selected' : ''; ?>><?php echo $ut; ?></option>
+                    <?php endforeach; ?>
+                </select>
             </div>
             <div class="catalog-filter-actions">
                 <a class="catalog-clear-link" href="<?php echo BASE_URL; ?>/public/properties.php">Clear all filters</a>
@@ -293,7 +254,7 @@ include __DIR__ . '/../includes/navbar.php';
                     <?php else: ?>
                         <h3>No matching available units</h3>
                         <p>There are <?php echo $availableUnitInventory; ?> vacant <?php echo $availableUnitInventory === 1 ? 'unit' : 'units'; ?> in the system, but none match these filters. Try another neighbourhood or broaden your rent and home-type selections.</p>
-                    <a class="button button-primary" href="<?php echo BASE_URL; ?>/public/properties.php">Browse all available homes</a>
+                        <a class="button button-primary" href="<?php echo BASE_URL; ?>/public/properties.php">Browse all available homes</a>
                     <?php endif; ?>
                 </div>
             <?php elseif (!$filterErrors): ?>
@@ -308,7 +269,7 @@ include __DIR__ . '/../includes/navbar.php';
                         ?>
                         <article class="catalog-property-card" data-unit-id="<?php echo (int)$property['unit_id']; ?>">
                             <a class="catalog-property-image" href="<?php echo e($detailsUrl); ?>" aria-label="View unit <?php echo e($property['unit_number']); ?> details at <?php echo e($property['name']); ?>">
-                                <img src="<?php echo $imageUrl; ?>" alt="<?php echo $hasPropertyImage ? 'Property image for ' . e($property['name']) : 'Illustrative residential image; an actual property photo was not provided'; ?>" width="840" height="560" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='<?php echo BASE_URL; ?>/assets/modern-residential-building.webp';this.alt='Illustrative residential image; an actual property photo was not provided';">
+                                <img src="<?php echo $imageUrl; ?>" alt="<?php echo $hasPropertyImage ? 'Property image for ' . e($property['name']) : 'Illustrative residential image; an actual property photo was not provided'; ?>" width="840" height="560" loading="lazy" decoding="async">
                                 <span class="catalog-availability"><i aria-hidden="true"></i>Vacant now</span>
                             </a>
                             <div class="catalog-property-body">

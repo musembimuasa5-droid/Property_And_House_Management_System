@@ -27,14 +27,8 @@ if ($tenant) {
 }
 
 $page_title = 'Lease & Documents';
-include __DIR__ . '/../includes/header.php';
+include __DIR__ . '/../includes/layout_top.php';
 ?>
-
-<div class="flex h-screen bg-gray-50 overflow-hidden">
-    <?php include __DIR__ . '/../includes/sidebar.php'; ?>
-    <div class="flex-1 flex flex-col overflow-y-auto">
-        <?php include __DIR__ . '/../includes/navbar.php'; ?>
-        <main id="main-content" class="flex-1 p-4 sm:p-6 space-y-6">
             <h1 class="text-2xl font-bold text-gray-900">Lease Agreements & Documents</h1>
             <section class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden" aria-labelledby="lease-documents-heading">
                 <div class="p-5 border-b border-gray-100"><h2 id="lease-documents-heading" class="font-bold text-gray-900">Lease agreements</h2><p class="mt-1 text-sm text-gray-500">Download a copy when a file has been attached by management.</p></div>
@@ -65,7 +59,4 @@ include __DIR__ . '/../includes/header.php';
                     <?php else: foreach ($documents as $document): ?><li class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 py-3"><div><p class="font-semibold text-gray-900"><?php echo e($document['title']); ?></p><p class="text-xs text-gray-500"><?php echo e($document['document_type']); ?> · Added <?php echo e(date('d M Y', strtotime($document['created_at']))); ?></p></div><a class="self-start rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary" href="<?php echo BASE_URL; ?>/tenant/download_document.php?type=document&amp;id=<?php echo (int)$document['id']; ?>">Download</a></li><?php endforeach; endif; ?>
                 </ul>
             </section>
-        </main>
-        <?php include __DIR__ . '/../includes/footer.php'; ?>
-    </div>
-</div>
+<?php include __DIR__ . '/../includes/layout_bottom.php'; ?>

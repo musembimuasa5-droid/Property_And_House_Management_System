@@ -26,7 +26,7 @@ function uploadApplicationFile($file, $subfolder, $allowed_extensions = ['jpg', 
     }
 
     $file_info = pathinfo($file['name']);
-    $ext = strtolower($file_info['extension']);
+    $ext = strtolower($file_info['extension'] ?? '');
 
     if (!in_array($ext, $allowed_extensions, true) || !is_uploaded_file($file['tmp_name'])) {
         return ['success' => false, 'path' => null, 'error' => 'Invalid file.'];

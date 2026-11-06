@@ -88,6 +88,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $req = $db->prepare('INSERT INTO viewing_requests (property_id, unit_id, visitor_name, visitor_phone, visitor_email, preferred_date, preferred_time, message) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
             $req->execute([$property_id, $unitId, $name, $phone, $email, $date, $time, $message !== '' ? $message : null]);
             if ($req->rowCount() === 1) {
+                try {
+                    notify_roles($db, MANAGEMENT_ROLES, 'New viewing request', "$name ($phone) wants to view {$property['name']} on " . format_date($date) . ' at ' . substr($time, 0, 5) . '.');
+                } catch (PDOException $notificationError) {
+                    error_log('Viewing request notification failed: ' . $notificationError->getMessage());
+                }
                 $success_msg = 'Your viewing request has been saved and is pending management approval. Management will contact you.';
                 $form_values = array_fill_keys(array_keys($form_values), '');
             } else {

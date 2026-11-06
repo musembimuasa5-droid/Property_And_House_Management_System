@@ -93,17 +93,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$errors) {
         try {
             $db = db();
-            $stmt = $db->prepare("INSERT INTO contact_messages (name, email, phone, subject, message, status, created_at) VALUES (?, ?, ?, ?, ?, 'New', NOW())");
+            $stmt = $db->prepare('INSERT INTO enquiries (full_name, email, phone, message) VALUES (?, ?, ?, ?)');
             $stmt->execute([
                 $form['name'],
                 $form['email'],
                 $form['phone'] !== '' ? $form['phone'] : null,
-                $form['subject'],
-                $form['message'],
+                'Subject: ' . $form['subject'] . "\n\n" . $form['message'],
             ]);
             if ($stmt->rowCount() === 1) {
+                try {
+                    notify_roles($db, MANAGEMENT_ROLES, 'New enquiry from ' . $form['name'], $form['subject'] . ': ' . $form['message']);
+                } catch (PDOException $notificationError) {
+                    error_log('Contact enquiry notification failed: ' . $notificationError->getMessage());
+                }
                 $_SESSION['contact_last_submission'] = time();
-                $_SESSION['contact_success'] = 'Your enquiry has been saved for the authorized support team to review. Email notifications are not configured, so this confirmation does not mean an email was sent.';
+                $_SESSION['contact_success'] = 'Your enquiry has been saved for the management team to review.';
                 header('Location: ' . BASE_URL . '/public/contact.php#contact-form', true, 303);
                 exit;
             }
