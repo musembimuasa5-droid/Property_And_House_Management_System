@@ -34,20 +34,12 @@ function format_currency($amount) {
 }
 
 /**
- * Return a rotating local sample image for listings without an uploaded photo.
- * These images are illustrative and should never replace a saved property image.
+ * Image for listings without an uploaded photo: a neutral "Photo coming soon" graphic.
+ * A placeholder (rather than reusing real house photos) avoids two different
+ * properties appearing with the same picture.
  */
-function sample_property_image($property_id) {
-    // house5.jpg shows a real, branded development and house6.jpg carries a stock-photo
-    // watermark, so neither is used as a stand-in listing photo.
-    $images = [
-        'assets/house1.jpg',
-        'assets/house2.jpg',
-        'assets/house3.jpg',
-        'assets/house4.jpg',
-    ];
-    $index = max(0, (abs((int)$property_id) - 1) % count($images));
-    return $images[$index];
+function sample_property_image($property_id = null) {
+    return 'assets/property-placeholder.svg';
 }
 
 /**

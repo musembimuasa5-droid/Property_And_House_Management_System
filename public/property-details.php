@@ -51,7 +51,7 @@ include __DIR__ . '/../includes/navbar.php';
                 <h1 class="text-3xl font-bold text-gray-900 mt-1"><?php echo e($property['name']); ?></h1>
                 <p class="text-sm text-gray-500 mt-2"><i class="fa-solid fa-location-dot mr-1 text-red-500"></i> <?php echo e($property['physical_address'] . ', ' . $property['estate']); ?></p>
                 <?php $imagePath = trim((string)($property['property_image'] ?? ''), '/'); $imageFile = $imagePath !== '' ? dirname(__DIR__) . '/' . $imagePath : ''; ?>
-                <?php if ($imagePath !== '' && is_file($imageFile)): ?><img class="w-full h-64 sm:h-80 object-cover rounded-lg mt-5" src="<?php echo BASE_URL . '/' . e($imagePath); ?>" alt="Exterior of <?php echo e($property['name']); ?>" fetchpriority="high"><?php else: ?><img class="w-full h-64 sm:h-80 object-cover rounded-lg mt-5" src="<?php echo BASE_URL . '/' . e(sample_property_image($property['id'])); ?>" alt="Sample home image; actual property photo not provided" fetchpriority="high"><?php endif; ?>
+                <?php if ($imagePath !== '' && is_file($imageFile)): ?><img class="w-full h-64 sm:h-80 object-cover rounded-lg mt-5" src="<?php echo BASE_URL . '/' . e($imagePath); ?>" alt="Exterior of <?php echo e($property['name']); ?>" fetchpriority="high"><?php else: ?><img class="w-full h-64 sm:h-80 object-cover rounded-lg mt-5" src="<?php echo BASE_URL . '/' . e(sample_property_image($property['id'])); ?>" alt="Photo coming soon for <?php echo e($property['name']); ?>" fetchpriority="high"><?php endif; ?>
                 <p class="text-gray-700 mt-4"><?php echo nl2br(e($property['description'])); ?></p>
             </div>
 

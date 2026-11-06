@@ -52,7 +52,7 @@ The landlord pages reuse the staff property and unit definitions (`includes/reso
 
 ## Sample data and photos
 
-`seed.sql` adds four sample properties for the seeded landlord (14 units, most of them vacant so they appear on the public site), using `assets/house1.jpg` to `house4.jpg`. Two bundled images are deliberately **not** used as listing photos: `house5.jpg` shows a real, branded development, and `house6.jpg` carries a stock-photo watermark. Replace all sample photos with your own licensed pictures before going live; landlords can upload a photo from **Edit** on each property.
+`seed.sql` adds four sample properties for the seeded landlord (14 units, most of them vacant so they appear on the public site), using `assets/house1.jpg` to `house4.jpg`. Two bundled images are deliberately **not** used as listing photos: `house5.jpg` shows a real, branded development, and `house6.jpg` carries a stock-photo watermark. Replace all sample photos with your own licensed pictures before going live; landlords can upload a photo from **Edit** on each property. A property without a photo shows a neutral "Photo coming soon" image (`assets/property-placeholder.svg`) rather than reusing another listing's picture.
 
 Only Super Admin and Accountant can delete payments. Each module page in `admin/` describes its table, fields, list columns and business rules, and passes that description to the shared engine in `includes/crud.php`. The engine handles validation, CSRF checks, audit logging, deletes blocked by linked records, and CSV export.
 

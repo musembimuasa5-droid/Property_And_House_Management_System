@@ -107,18 +107,25 @@ document.addEventListener('DOMContentLoaded', () => {
     const navigation = publicNavigation;
     if (!toggle || !navigation) return;
 
-    toggle.addEventListener('click', () => {
-        const isOpen = toggle.getAttribute('aria-expanded') === 'true';
-        toggle.setAttribute('aria-expanded', String(!isOpen));
-        toggle.setAttribute('aria-label', isOpen ? 'Open navigation' : 'Close navigation');
-        navigation.classList.toggle('is-open', !isOpen);
-    });
+    // Public mobile menu: the toggle, a link, a tap outside or Escape all keep state and labels in sync.
+    const setMenu = (open) => {
+        toggle.setAttribute('aria-expanded', String(open));
+        toggle.setAttribute('aria-label', open ? 'Close navigation' : 'Open navigation');
+        navigation.classList.toggle('is-open', open);
+    };
+    const isOpen = () => toggle.getAttribute('aria-expanded') === 'true';
 
+    toggle.addEventListener('click', () => setMenu(!isOpen()));
     navigation.addEventListener('click', (event) => {
-        if (event.target.closest('a')) {
-            toggle.setAttribute('aria-expanded', 'false');
-            toggle.setAttribute('aria-label', 'Open navigation');
-            navigation.classList.remove('is-open');
+        if (event.target.closest('a')) setMenu(false);
+    });
+    document.addEventListener('click', (event) => {
+        if (isOpen() && !navigation.contains(event.target) && !toggle.contains(event.target)) setMenu(false);
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && isOpen()) {
+            setMenu(false);
+            toggle.focus();
         }
     });
 });

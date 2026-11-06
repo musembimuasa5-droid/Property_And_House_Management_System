@@ -219,9 +219,8 @@ function render_property_card(array $property): void {
     ?>
     <article class="property-tile">
         <div class="property-tile-media">
-            <img src="<?php echo e(BASE_URL . '/' . $image); ?>" alt="<?php echo $isSample ? 'Sample home photo; no photo uploaded for this property' : 'Photo of ' . e($property['name']); ?>" loading="lazy">
+            <img src="<?php echo e(BASE_URL . '/' . $image); ?>" alt="<?php echo $isSample ? 'No photo uploaded yet for ' . e($property['name']) : 'Photo of ' . e($property['name']); ?>" loading="lazy">
             <span class="property-tile-badge"><?php echo render_status_badge($property['status']); ?></span>
-            <?php if ($isSample): ?><span class="property-tile-sample">Sample photo</span><?php endif; ?>
         </div>
         <div class="p-4 flex flex-col gap-3 flex-1">
             <div>

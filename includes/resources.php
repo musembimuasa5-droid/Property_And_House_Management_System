@@ -13,9 +13,8 @@ const UNIT_STATUSES = ['Vacant', 'Occupied', 'Reserved', 'Under Maintenance', 'U
 
 /** List thumbnail; decorative because the property name sits beside it. */
 function property_thumbnail(array $row): string {
-    [$path, $isSample] = property_image($row);
-    return '<img src="' . e(BASE_URL . '/' . $path) . '" alt="" class="w-20 h-14 object-cover rounded-lg border border-gray-200" loading="lazy">'
-        . ($isSample ? '<span class="block text-[10px] text-gray-500 mt-0.5">Sample photo</span>' : '');
+    [$path] = property_image($row);
+    return '<img src="' . e(BASE_URL . '/' . $path) . '" alt="" class="w-20 h-14 object-cover rounded-lg border border-gray-200" loading="lazy">';
 }
 
 function property_resource(?int $landlordId = null): array {

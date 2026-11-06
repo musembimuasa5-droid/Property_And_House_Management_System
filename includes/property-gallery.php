@@ -4,7 +4,7 @@ $galleryPhotos = [
     ['assets/house2.jpg', 'Residential neighbourhood'],
     ['assets/house3.jpg', 'Modern family house'],
     ['assets/house4.jpg', 'Gated residential homes'],
-    ['assets/house5.jpg', 'Apartment community'],
+    // house5.jpg is left out: it shows a real, branded development.
 ];
 ?>
 <section class="sample-gallery-section" aria-labelledby="sample-gallery-title">
