@@ -20,14 +20,8 @@ if ($tenant) {
 }
 
 $page_title = 'Lease & Documents';
-include __DIR__ . '/../includes/header.php';
+include __DIR__ . '/../includes/layout_top.php';
 ?>
-
-<div class="flex h-screen bg-gray-50 overflow-hidden">
-    <?php include __DIR__ . '/../includes/sidebar.php'; ?>
-    <div class="flex-1 flex flex-col overflow-y-auto">
-        <?php include __DIR__ . '/../includes/navbar.php'; ?>
-        <main class="flex-1 p-6 space-y-6">
             <h1 class="text-2xl font-bold text-gray-900">Lease Agreements & Documents</h1>
             <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden p-6">
                 <?php if (empty($leases)): ?>
@@ -46,7 +40,4 @@ include __DIR__ . '/../includes/header.php';
                     </ul>
                 <?php endif; ?>
             </div>
-        </main>
-        <?php include __DIR__ . '/../includes/footer.php'; ?>
-    </div>
-</div>
+<?php include __DIR__ . '/../includes/layout_bottom.php'; ?>

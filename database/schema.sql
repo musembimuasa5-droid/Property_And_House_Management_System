@@ -302,6 +302,22 @@ CREATE TABLE IF NOT EXISTS viewing_requests (
     FOREIGN KEY (unit_id) REFERENCES units(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
+-- 18b. Enquiries from the public Contact page (also in database/migrations/001_create_enquiries.sql)
+CREATE TABLE IF NOT EXISTS enquiries (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    full_name VARCHAR(100) NOT NULL,
+    email VARCHAR(150) NOT NULL,
+    phone VARCHAR(20) NULL,
+    message TEXT NOT NULL,
+    status ENUM('New', 'In Progress', 'Resolved', 'Closed') DEFAULT 'New',
+    response_notes TEXT NULL,
+    handled_by INT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_enquiries_status (status),
+    FOREIGN KEY (handled_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
 -- 19. Documents Table
 CREATE TABLE IF NOT EXISTS documents (
     id INT AUTO_INCREMENT PRIMARY KEY,

@@ -24,9 +24,11 @@ $query = "SELECT p.*, l.estate, l.sub_county, MIN(u.monthly_rent) as min_rent, C
 $params = [];
 
 if (!empty($location)) {
-    $query .= " AND (l.estate = ? OR l.sub_county = ?)";
-    $params[] = $location;
-    $params[] = $location;
+    // Partial, case-insensitive match so "kilim" finds Kilimani; wildcards typed by the user are escaped.
+    $query .= " AND (l.estate LIKE ? OR l.sub_county LIKE ?)";
+    $likeLocation = '%' . addcslashes($location, '\\%_') . '%';
+    $params[] = $likeLocation;
+    $params[] = $likeLocation;
 }
 if (!empty($house_type)) {
     $query .= " AND u.house_type = ?";
@@ -78,8 +80,9 @@ include __DIR__ . '/../includes/navbar.php';
                 <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Estate / Location</label>
                 <select name="location" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary outline-none">
                     <option value="">All Locations</option>
+                    <?php if ($location !== '' && !in_array($location, NAIROBI_ESTATES, true)): ?><option value="<?php echo e($location); ?>" selected><?php echo e($location); ?></option><?php endif; ?>
                     <?php foreach (NAIROBI_ESTATES as $est): ?>
-                        <option value="<?php echo $est; ?>" <?php echo $location === $est ? 'selected' : ''; ?>><?php echo $est; ?></option>
+                        <option value="<?php echo e($est); ?>" <?php echo $location === $est ? 'selected' : ''; ?>><?php echo e($est); ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -117,7 +120,7 @@ include __DIR__ . '/../includes/navbar.php';
                     <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
                         <div class="h-48 bg-gray-200 flex items-center justify-center text-gray-400">
                             <?php $imagePath = trim((string)($prop['property_image'] ?? ''), '/'); $imageFile = $imagePath !== '' ? dirname(__DIR__) . '/' . $imagePath : ''; ?>
-                            <?php if ($imagePath !== '' && is_file($imageFile)): ?><img class="w-full h-full object-cover" src="<?php echo BASE_URL . '/' . e($imagePath); ?>" alt="Exterior of <?php echo e($prop['name']); ?>" loading="lazy"><?php else: ?><img class="w-full h-full object-cover" src="<?php echo BASE_URL . '/' . e(sample_property_image($prop['id'])); ?>" alt="Sample home image; actual property photo not provided" loading="lazy"><?php endif; ?>
+                            <?php if ($imagePath !== '' && is_file($imageFile)): ?><img class="w-full h-full object-cover" src="<?php echo BASE_URL . '/' . e($imagePath); ?>" alt="Exterior of <?php echo e($prop['name']); ?>" loading="lazy"><?php else: ?><img class="w-full h-full object-cover" src="<?php echo BASE_URL . '/' . e(sample_property_image($prop['id'])); ?>" alt="Photo coming soon for <?php echo e($prop['name']); ?>" loading="lazy"><?php endif; ?>
                         </div>
                         <div class="p-5 flex-1 flex flex-col justify-between">
                             <div>

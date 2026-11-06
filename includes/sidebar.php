@@ -1,29 +1,60 @@
 <?php
+require_once __DIR__ . '/shell.php';
 $currentUser = getCurrentUser();
 $role = $currentUser['role_name'] ?? 'Guest';
 $dashboardPath = dashboardPathForRole($role);
-$currentPath = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
-function sidebarLink($path, $icon, $label) {
-    global $currentPath;
-    $url = BASE_URL . '/' . ltrim($path, '/');
-    $active = strpos($currentPath, '/' . ltrim($path, '/')) !== false;
-    echo '<a href="' . e($url) . '"' . ($active ? ' aria-current="page"' : '') . ' class="flex items-center space-x-3 px-3 py-2.5 rounded-lg">';
-    echo '<i class="fa-solid ' . e($icon) . ' w-5 text-accent"></i><span>' . e($label) . '</span></a>';
+if (!function_exists('sidebarLink')) {
+    function sidebarLink($path, $icon, $label, $badge = 0) {
+        $url = BASE_URL . '/' . ltrim($path, '/');
+        $target = '/' . ltrim(strtok($path, '?#'), '/');
+        $script = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
+        $active = $target !== '/' && substr($script, -strlen($target)) === $target && strpos($path, '#') === false;
+        echo '<a href="' . e($url) . '" class="sidebar-link"' . ($active ? ' aria-current="page"' : '') . '>';
+        echo '<i class="fa-solid ' . e($icon) . '" aria-hidden="true"></i><span>' . e($label) . '</span>';
+        if ($badge > 0) echo '<span class="sidebar-badge" aria-label="' . (int)$badge . ' waiting">' . ($badge > 99 ? '99+' : (int)$badge) . '</span>';
+        echo '</a>';
+    }
+    function sidebarHeading($label) {
+        echo '<p class="sidebar-heading">' . e($label) . '</p>';
+    }
+    function sidebarModules(string $portal, array $badges = []) {
+        $lastGroup = '';
+        foreach (portal_modules($portal) as $key => $module) {
+            if ($module['group'] !== $lastGroup) { sidebarHeading($module['group']); $lastGroup = $module['group']; }
+            sidebarLink($module['path'], $module['icon'], $module['label'], $badges[$key] ?? 0);
+        }
+    }
 }
+$unreadNotices = $currentUser ? shell_notifications((int)$currentUser['id'])['unread'] : 0;
 ?>
-<aside id="sidebar" class="bg-secondary text-gray-300 w-64 space-y-6 py-7 px-2 absolute inset-y-0 left-0 transform -translate-x-full lg:relative lg:translate-x-0 transition duration-200 ease-in-out z-20 flex flex-col">
-<div class="px-4 flex items-center space-x-2 text-white"><img src="<?php echo BASE_URL; ?>/assets/houselogo.avif" alt="" class="sidebar-brand-logo"><span class="text-lg font-bold"><?php echo e(APP_NAME); ?></span></div>
-<nav class="flex-1 space-y-1 px-2" aria-label="<?php echo e($role); ?> navigation">
-<div class="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 pt-4 pb-2"><?php echo e($role); ?> workspace</div>
-<?php if ($currentUser) sidebarLink($dashboardPath, 'fa-chart-pie', 'Dashboard'); ?>
-<?php if (in_array($role, ['Super Admin', 'Property Manager', 'Accountant'], true)): ?>
-<?php sidebarLink('public/properties.php', 'fa-building', 'Property Directory'); ?>
-<?php elseif ($role === 'Landlord'): ?>
-<?php sidebarLink('public/properties.php', 'fa-building', 'Public Directory'); ?>
-<?php elseif ($role === 'Caretaker'): ?>
-<?php sidebarLink('caretaker/dashboard.php#assigned-requests', 'fa-screwdriver-wrench', 'Assigned Requests'); ?>
-<?php elseif ($role === 'Tenant'): ?>
-<?php sidebarLink('tenant/rent.php', 'fa-receipt', 'Rent & Payments'); sidebarLink('tenant/bills.php', 'fa-droplet', 'Utility Bills'); sidebarLink('tenant/maintenance.php', 'fa-screwdriver-wrench', 'Maintenance'); sidebarLink('tenant/complaints.php', 'fa-triangle-exclamation', 'Complaints'); sidebarLink('tenant/documents.php', 'fa-file', 'Lease Documents'); sidebarLink('tenant/notices.php', 'fa-bell', 'Notices'); sidebarLink('tenant/profile.php', 'fa-user', 'My Profile'); ?>
-<?php endif; ?>
-<?php if (!$currentUser): ?><div class="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 pt-6 pb-2">Public Directory</div><?php sidebarLink('public/properties.php', 'fa-magnifying-glass', 'Browse Vacancies'); ?><?php endif; ?>
-</nav></aside>
+<aside id="sidebar" class="app-sidebar" aria-label="Sidebar">
+    <div class="sidebar-brand">
+        <a href="<?php echo e(BASE_URL . '/' . $dashboardPath); ?>">
+            <img src="<?php echo BASE_URL; ?>/assets/houselogo.avif" alt="">
+            <span><strong><?php echo e(APP_NAME); ?></strong><small><?php echo e($role); ?> workspace</small></span>
+        </a>
+        <button type="button" class="sidebar-close" data-sidebar-close aria-label="Close navigation"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+    </div>
+    <nav class="sidebar-nav" aria-label="<?php echo e($role); ?> navigation">
+        <?php if ($currentUser) { sidebarHeading('Overview'); sidebarLink($dashboardPath, 'fa-chart-pie', 'Dashboard'); } ?>
+        <?php if (in_array($role, STAFF_ROLES, true)): ?>
+            <?php sidebarModules('staff', shell_module_badges()); ?>
+        <?php elseif ($role === 'Landlord'): ?>
+            <?php sidebarModules('landlord'); ?>
+        <?php elseif ($role === 'Caretaker'): ?>
+            <?php sidebarHeading('Work'); sidebarLink('caretaker/dashboard.php#assigned-requests', 'fa-screwdriver-wrench', 'Assigned Requests'); ?>
+        <?php elseif ($role === 'Tenant'): ?>
+            <?php sidebarHeading('My tenancy'); sidebarLink('tenant/rent.php', 'fa-receipt', 'Rent & Statement'); sidebarLink('tenant/payments.php', 'fa-money-bill-wave', 'Payment History'); sidebarLink('tenant/bills.php', 'fa-droplet', 'Utility Bills'); sidebarLink('tenant/documents.php', 'fa-file', 'Lease Documents'); ?>
+            <?php sidebarHeading('Help'); sidebarLink('tenant/maintenance.php', 'fa-screwdriver-wrench', 'Maintenance'); sidebarLink('tenant/complaints.php', 'fa-triangle-exclamation', 'Complaints'); ?>
+        <?php endif; ?>
+        <?php if ($currentUser): ?>
+            <?php sidebarHeading('Account'); sidebarLink('account/notifications.php', 'fa-bell', $role === 'Tenant' ? 'Notices' : 'Notifications', $unreadNotices); ?>
+            <?php if ($role === 'Tenant') sidebarLink('tenant/profile.php', 'fa-user', 'My Profile'); ?>
+            <?php sidebarLink('account/settings.php', 'fa-gear', 'Account Settings'); ?>
+        <?php endif; ?>
+    </nav>
+    <div class="sidebar-footer">
+        <a class="sidebar-link" href="<?php echo BASE_URL; ?>/" target="_blank" rel="noopener"><i class="fa-solid fa-globe" aria-hidden="true"></i><span>View public website</span><i class="fa-solid fa-arrow-up-right-from-square ml-auto text-xs" aria-hidden="true"></i><span class="sr-only">(opens in a new tab)</span></a>
+    </div>
+</aside>
+<div class="sidebar-backdrop" data-sidebar-close hidden></div>

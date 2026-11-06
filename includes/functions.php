@@ -34,20 +34,12 @@ function format_currency($amount) {
 }
 
 /**
- * Return a rotating local sample image for listings without an uploaded photo.
- * These images are illustrative and should never replace a saved property image.
+ * Image for listings without an uploaded photo: a neutral "Photo coming soon" graphic.
+ * A placeholder (rather than reusing real house photos) avoids two different
+ * properties appearing with the same picture.
  */
-function sample_property_image($property_id) {
-    $images = [
-        'assets/house1.jpg',
-        'assets/house6.jpg',
-        'assets/house2.jpg',
-        'assets/house3.jpg',
-        'assets/house4.jpg',
-        'assets/house5.jpg',
-    ];
-    $index = max(0, (abs((int)$property_id) - 1) % count($images));
-    return $images[$index];
+function sample_property_image($property_id = null) {
+    return 'assets/property-placeholder.svg';
 }
 
 /**
@@ -69,18 +61,70 @@ function redirect($path) {
  * Display status badge with appropriate Tailwind colors
  */
 function render_status_badge($status) {
+    $green = 'bg-green-100 text-green-800';
+    $blue = 'bg-blue-100 text-blue-800';
+    $yellow = 'bg-yellow-100 text-yellow-800';
+    $orange = 'bg-orange-100 text-orange-800';
+    $red = 'bg-red-100 text-red-800';
+    $purple = 'bg-purple-100 text-purple-800';
     $colors = [
-        'Active' => 'bg-green-100 text-green-800',
-        'Paid' => 'bg-green-100 text-green-800',
-        'Occupied' => 'bg-blue-100 text-blue-800',
-        'Vacant' => 'bg-yellow-100 text-yellow-800',
-        'Pending' => 'bg-orange-100 text-orange-800',
-        'Unpaid' => 'bg-red-100 text-red-800',
-        'Overdue' => 'bg-red-100 text-red-800',
-        'Inactive' => 'bg-gray-100 text-gray-800',
-        'Under Maintenance' => 'bg-purple-100 text-purple-800'
+        'Active' => $green, 'Paid' => $green, 'Completed' => $green, 'Resolved' => $green, 'Approved' => $green,
+        'Occupied' => $blue, 'Reviewed' => $blue, 'Assigned' => $blue, 'In Progress' => $blue, 'Under Review' => $blue, 'Renewed' => $blue, 'New' => $blue,
+        'Vacant' => $yellow, 'Waiting' => $yellow, 'Rescheduled' => $yellow, 'Medium' => $yellow,
+        'Pending' => $orange, 'Partial' => $orange, 'Submitted' => $orange, 'Open' => $orange, 'High' => $orange,
+        'Unpaid' => $red, 'Overdue' => $red, 'Rejected' => $red, 'Terminated' => $red, 'Emergency' => $red,
+        'Suspended' => $red, 'Evicted' => $red, 'Blacklisted' => $red,
+        'Under Maintenance' => $purple, 'Reserved' => $purple,
     ];
-    
+
     $class = $colors[$status] ?? 'bg-gray-100 text-gray-800';
     return '<span class="px-2.5 py-0.5 rounded-full text-xs font-semibold ' . $class . '">' . e($status) . '</span>';
+}
+
+/** Queue a one-time message for the next page load (Post/Redirect/Get). */
+function set_flash($type, $message) {
+    $_SESSION['flash_type'] = $type;
+    $_SESSION['flash_message'] = $message;
+}
+
+/** Add an in-app notice; shown to tenants on their Notices page. */
+function notify_user(PDO $db, $user_id, $title, $message) {
+    if (!$user_id) return;
+    $db->prepare('INSERT INTO notifications (user_id, title, message) VALUES (?, ?, ?)')->execute([$user_id, $title, $message]);
+}
+
+/** Alert every active user with one of these roles, e.g. managers about a new public enquiry. */
+function notify_roles(PDO $db, array $roles, $title, $message) {
+    $placeholders = implode(', ', array_fill(0, count($roles), '?'));
+    $stmt = $db->prepare("SELECT u.id FROM users u JOIN roles r ON r.id = u.role_id WHERE u.status = 'Active' AND r.name IN ($placeholders)");
+    $stmt->execute(array_values($roles));
+    foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $userId) notify_user($db, (int)$userId, $title, $message);
+}
+
+/** Roles alerted about new public and tenant requests. */
+const MANAGEMENT_ROLES = ['Super Admin', 'Property Manager'];
+
+/** Listing photo for a property: its uploaded image, else a labelled sample. Returns [url path, is sample]. */
+function property_image(array $property) {
+    $path = trim((string)($property['property_image'] ?? ''), '/');
+    if ($path !== '' && is_file(dirname(__DIR__) . '/' . $path)) return [$path, false];
+    return [sample_property_image($property['id'] ?? 0), true];
+}
+
+function format_date($date) {
+    if (empty($date)) return '—';
+    $timestamp = strtotime((string)$date);
+    return $timestamp ? date('d M Y', $timestamp) : (string)$date;
+}
+
+/** Turn a 'YYYY-MM' billing period into 'Sep 2026'. */
+function format_period($period) {
+    $date = DateTime::createFromFormat('!Y-m', (string)$period);
+    return $date ? $date->format('M Y') : (string)$period;
+}
+
+/** Stop spreadsheet apps from running cell text such as =HYPERLINK(...) as a formula. */
+function csv_safe($value) {
+    $value = (string)($value ?? '');
+    return ($value !== '' && !is_numeric($value) && in_array($value[0], ['=', '+', '-', '@', "\t", "\r"], true)) ? "'" . $value : $value;
 }

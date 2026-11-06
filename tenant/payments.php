@@ -20,14 +20,8 @@ if ($tenant) {
 }
 
 $page_title = 'Payment History';
-include __DIR__ . '/../includes/header.php';
+include __DIR__ . '/../includes/layout_top.php';
 ?>
-
-<div class="flex h-screen bg-gray-50 overflow-hidden">
-    <?php include __DIR__ . '/../includes/sidebar.php'; ?>
-    <div class="flex-1 flex flex-col overflow-y-auto">
-        <?php include __DIR__ . '/../includes/navbar.php'; ?>
-        <main class="flex-1 p-6 space-y-6">
             <h1 class="text-2xl font-bold text-gray-900">Payment Records & Receipts</h1>
             <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
                 <div class="overflow-x-auto"><table class="w-full text-left border-collapse">
@@ -38,11 +32,12 @@ include __DIR__ . '/../includes/header.php';
                             <th class="p-4">Amount</th>
                             <th class="p-4">Method</th>
                             <th class="p-4">Date</th>
+                            <th class="p-4"><span class="sr-only">Receipt</span></th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100 text-sm">
                         <?php if (empty($payments)): ?>
-                            <tr><td colspan="5" class="p-6 text-center text-gray-500">No payment history found.</td></tr>
+                            <tr><td colspan="6" class="p-6 text-center text-gray-500">No payment history found.</td></tr>
                         <?php else: ?>
                             <?php foreach ($payments as $p): ?>
                                 <tr class="hover:bg-gray-50">
@@ -50,14 +45,12 @@ include __DIR__ . '/../includes/header.php';
                                     <td class="p-4"><?php echo e($p['unit_number']); ?></td>
                                     <td class="p-4 font-semibold text-success"><?php echo format_currency($p['amount']); ?></td>
                                     <td class="p-4"><?php echo render_status_badge($p['payment_method']); ?></td>
-                                    <td class="p-4 text-gray-500"><?php echo e($p['payment_date']); ?></td>
+                                    <td class="p-4 text-gray-500"><?php echo e(format_date($p['payment_date'])); ?></td>
+                                    <td class="p-4 text-right"><a class="btn btn-small btn-secondary" href="<?php echo BASE_URL; ?>/tenant/receipt.php?id=<?php echo (int)$p['id']; ?>"><i class="fa-solid fa-print" aria-hidden="true"></i> Receipt</a></td>
                                 </tr>
                             <?php endforeach; ?>
                         <?php endif; ?>
                     </tbody>
                 </table></div>
             </div>
-        </main>
-        <?php include __DIR__ . '/../includes/footer.php'; ?>
-    </div>
-</div>
+<?php include __DIR__ . '/../includes/layout_bottom.php'; ?>

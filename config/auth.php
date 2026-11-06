@@ -53,6 +53,19 @@ function requireRole($allowed_roles) {
     }
 }
 
+/** The signed-in landlord's profile; stops with 403 when the account is not linked to one. */
+function requireLandlordProfile() {
+    requireRole('Landlord');
+    $stmt = db()->prepare('SELECT id, full_name FROM landlords WHERE user_id = ? LIMIT 1');
+    $stmt->execute([$_SESSION['user_id']]);
+    $landlord = $stmt->fetch();
+    if (!$landlord) {
+        http_response_code(403);
+        exit('Landlord profile is not linked to this account. Please contact an administrator.');
+    }
+    return $landlord;
+}
+
 function logAuditAction($action, $module, $record_id = null, $description = '') {
     try {
         $db = db();
