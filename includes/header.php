@@ -13,28 +13,11 @@ require_once __DIR__ . '/../config/config.php';
     <title><?php echo e(isset($page_title) ? $page_title . ' - ' . APP_NAME : APP_NAME); ?></title>
     <link rel="icon" type="image/jpeg" href="<?php echo BASE_URL; ?>/assets/houselogo.jpg">
     <meta name="theme-color" content="#1e3a5f">
-    <script>
-        window.tailwind = window.tailwind || {};
-        window.tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        primary: '#1E3A5F',
-                        secondary: '#14283F',
-                        accent: '#D89B32',
-                        success: '#198754',
-                        warning: '#D99A00',
-                        danger: '#DC3545'
-                    }
-                }
-            }
-        }
-    </script>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Load local design rules last so shared components take precedence over framework utilities. -->
     <link rel="stylesheet" href="<?php echo BASE_URL; ?>/assets/app.css?v=<?php echo (int)filemtime(__DIR__ . '/../assets/app.css'); ?>">
+    <!-- Tailwind utilities compiled ahead of time (assets/tailwind.css). They load after app.css, the same
+         order the former runtime CDN script produced, so utilities still win ties as the layout expects. -->
+    <link rel="stylesheet" href="<?php echo BASE_URL; ?>/assets/tailwind.css?v=<?php echo (int)filemtime(__DIR__ . '/../assets/tailwind.css'); ?>">
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans antialiased min-h-screen flex flex-col">
