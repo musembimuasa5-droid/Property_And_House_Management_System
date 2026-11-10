@@ -22,6 +22,7 @@ crud_run([
         'deposit' => ['label' => 'Deposit (KSh)', 'type' => 'decimal', 'min' => 0, 'help' => "Leave blank to use the unit's deposit."],
         'payment_due_day' => ['label' => 'Rent due day of month', 'type' => 'number', 'min' => 1, 'max' => 28, 'required' => true, 'default' => 5],
         'notice_period_days' => ['label' => 'Notice period (days)', 'type' => 'number', 'min' => 0, 'max' => 365, 'required' => true, 'default' => 30],
+        'rent_review_date' => ['label' => 'Rent review date', 'type' => 'date', 'help' => 'Optional. The date from which rent may next be reviewed, as agreed in the tenancy.'],
         'status' => ['label' => 'Status', 'type' => 'select', 'options' => LEASE_STATUSES, 'required' => true, 'default' => 'Active'],
         'special_terms' => ['label' => 'Special terms', 'type' => 'textarea'],
     ],
@@ -60,6 +61,7 @@ crud_run([
     'hooks' => [
         'prepare' => function (array $data, ?array $old, PDO $db) {
             if ($data['end_date'] <= $data['start_date']) throw new UserFacingException('The end date must be after the start date.');
+            if (!empty($data['rent_review_date']) && $data['rent_review_date'] <= $data['start_date']) throw new UserFacingException('The rent review date must be after the start date.');
 
             $unit = $db->prepare('SELECT property_id, monthly_rent, deposit, status FROM units WHERE id = ?');
             $unit->execute([$data['unit_id']]);

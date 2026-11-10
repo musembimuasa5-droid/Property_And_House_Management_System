@@ -74,6 +74,7 @@ include __DIR__ . '/../includes/navbar.php';
                 <label for="message" class="block text-xs font-semibold text-gray-500 uppercase mb-1">Message</label>
                 <textarea id="message" name="message" rows="5" required maxlength="3000" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"><?php echo e($form['message']); ?></textarea>
             </div>
+            <p class="text-xs text-gray-500">We use your details only to reply to this message. See the <a class="text-primary font-semibold" href="<?php echo BASE_URL; ?>/public/privacy.php">privacy notice</a>.</p>
             <button type="submit" class="bg-primary hover:bg-blue-800 text-white font-semibold px-6 py-2.5 rounded-lg text-sm transition">
                 Send Message
             </button>

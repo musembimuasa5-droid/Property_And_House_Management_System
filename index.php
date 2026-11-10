@@ -40,7 +40,7 @@ function bedroom_summary(array $listing): string {
     return ($min === 0 ? 'Studio' : $min) . '–' . $max . ' bedrooms';
 }
 
-$page_title = 'Nairobi Property & House Management';
+$page_title = 'Urban Escape: Homes and Property Management in Nairobi';
 $page_description = 'Find available homes in Nairobi and manage properties, rent, tenants and maintenance through one practical platform.';
 include __DIR__ . '/includes/header.php';
 include __DIR__ . '/includes/navbar.php';

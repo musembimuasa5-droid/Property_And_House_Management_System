@@ -28,6 +28,8 @@ function report_catalog(): array {
             'description' => 'Requests raised in the period with status, cost and time to resolve.'],
         'leases' => ['title' => 'Lease expiry', 'icon' => 'fa-file-signature', 'range' => 'next_90_days', 'landlord' => true,
             'description' => 'Active leases ending in the period, so renewals can be planned.'],
+        'deposits' => ['title' => 'Deposit ledger', 'icon' => 'fa-vault', 'range' => 'none', 'landlord' => true,
+            'description' => 'Deposits agreed, received, deducted, refunded and still held, per lease.'],
         'statement' => ['title' => 'Tenant statement', 'icon' => 'fa-user-clock', 'range' => 'year_to_date', 'landlord' => false,
             'description' => 'Charges and payments for one tenant with a running balance.'],
     ];
@@ -284,6 +286,41 @@ function report_leases(PDO $db, array $params): array {
         'rows' => $rows,
         'totals' => ['monthly_rent' => $rent],
         'summary' => [['Leases ending', count($rows)], ['Monthly rent affected', format_currency($rent)]],
+    ];
+}
+
+function report_deposits(PDO $db, array $params): array {
+    [$scope, $values] = report_scope($params);
+    $rows = report_query($db, "SELECT t.full_name AS tenant, CONCAT(p.name, ' / ', u.unit_number) AS unit, l.status AS lease_status, l.deposit AS agreed,
+            COALESCE(SUM(CASE WHEN d.transaction_type = 'Received' THEN d.amount END), 0) AS received,
+            COALESCE(SUM(CASE WHEN d.transaction_type = 'Deduction' THEN d.amount END), 0) AS deducted,
+            COALESCE(SUM(CASE WHEN d.transaction_type = 'Refund' THEN d.amount END), 0) AS refunded
+        FROM leases l JOIN tenants t ON t.id = l.tenant_id JOIN units u ON u.id = l.unit_id JOIN properties p ON p.id = l.property_id
+        LEFT JOIN deposit_transactions d ON d.lease_id = l.id
+        WHERE l.status <> 'Pending' $scope
+        GROUP BY l.id, t.full_name, p.name, u.unit_number, l.status, l.deposit
+        ORDER BY FIELD(l.status, 'Terminated', 'Expired', 'Active', 'Renewed'), t.full_name", $values);
+    foreach ($rows as &$row) {
+        $row['held'] = round($row['received'] - $row['deducted'] - $row['refunded'], 2);
+        $row['deposit_status'] = deposit_status($row['lease_status'], (float)$row['agreed'], (float)$row['received'], $row['held']);
+    }
+    unset($row);
+    $totals = report_sum($rows, ['agreed', 'received', 'deducted', 'refunded', 'held']);
+    $due = array_filter($rows, fn($row) => $row['deposit_status'] === 'Due for refund');
+    return [
+        'title' => 'Deposit ledger',
+        'subtitle' => 'Position as of ' . format_date(date('Y-m-d')),
+        'columns' => [
+            'tenant' => ['label' => 'Tenant'], 'unit' => ['label' => 'Property / unit'], 'lease_status' => ['label' => 'Lease', 'format' => 'badge'],
+            'agreed' => ['label' => 'Agreed', 'format' => 'currency'], 'received' => ['label' => 'Received', 'format' => 'currency'],
+            'deducted' => ['label' => 'Deducted', 'format' => 'currency'], 'refunded' => ['label' => 'Refunded', 'format' => 'currency'],
+            'held' => ['label' => 'Held', 'format' => 'currency'], 'deposit_status' => ['label' => 'Status', 'format' => 'badge'],
+        ],
+        'rows' => $rows,
+        'totals' => $totals,
+        'summary' => [['Deposits held', format_currency($totals['held'])], ['Due for refund', count($due) . ' · ' . format_currency(array_sum(array_column($due, 'held')))],
+            ['Deducted to date', format_currency($totals['deducted'])]],
+        'notice' => 'Deductions are listed with their reasons in the Deposit Ledger and are backed by move-out condition reports.',
     ];
 }
 

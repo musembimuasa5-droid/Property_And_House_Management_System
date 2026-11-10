@@ -28,6 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db->prepare("UPDATE maintenance_requests SET status = ?, actual_cost = COALESCE(?, actual_cost), completed_date = IF(? = 'Completed', NOW(), NULL) WHERE id = ? AND assigned_staff = ?")
                 ->execute([$status, $cost === '' ? null : round((float)$cost, 2), $status, $requestId, $user['id']]);
             if ($request['status'] !== $status) notify_user($db, $request['user_id'], 'Maintenance request update', "Your {$request['category']} request #$requestId is now: $status.");
+            record_maintenance_update($db, (int)$requestId, $status, 'Updated by the caretaker' . ($cost !== '' ? '; cost ' . format_currency($cost) : ''));
             logAuditAction('UPDATE', 'maintenance_requests', $requestId, "Caretaker set status to $status");
             set_flash('success', "Request #$requestId updated to $status.");
         }
@@ -42,7 +43,7 @@ $count = $db->prepare("SELECT COUNT(DISTINCT mr.property_id) properties, COUNT(D
     COALESCE(SUM(mr.status = 'Completed' AND mr.completed_date >= DATE_FORMAT(CURDATE(), '%Y-%m-01')), 0) completed_month $base");
 $count->execute([$user['id']]);
 $stats = $count->fetch();
-$recent = $db->prepare("SELECT mr.id, mr.category, mr.description, mr.priority, mr.status, mr.actual_cost, mr.created_at, p.name property_name, u.unit_number, t.full_name tenant_name, t.phone tenant_phone
+$recent = $db->prepare("SELECT mr.id, mr.category, mr.description, mr.priority, mr.status, mr.actual_cost, mr.created_at, mr.image_path, p.name property_name, u.unit_number, t.full_name tenant_name, t.phone tenant_phone
     $base ORDER BY mr.status IN ('Completed','Cancelled'), FIELD(mr.priority, 'Emergency', 'High', 'Medium', 'Low'), mr.created_at DESC LIMIT 20");
 $recent->execute([$user['id']]);
 $requests = $recent->fetchAll();
@@ -64,7 +65,7 @@ include __DIR__ . '/../includes/layout_top.php';
         <?php if (!$requests): ?><tr><td colspan="6" class="p-5 text-center text-gray-500">No maintenance requests have been assigned to you.</td></tr><?php endif; ?>
         <?php foreach ($requests as $request): $closed = in_array($request['status'], ['Completed', 'Cancelled'], true); ?>
             <tr>
-                <td class="p-4 align-top"><strong><?php echo e($request['category']); ?></strong> <span class="text-xs text-gray-500">#<?php echo (int)$request['id']; ?> · <?php echo e(format_date($request['created_at'])); ?></span><div class="text-xs text-gray-600 max-w-xs mt-1"><?php echo e($request['description']); ?></div></td>
+                <td class="p-4 align-top"><strong><?php echo e($request['category']); ?></strong> <span class="text-xs text-gray-500">#<?php echo (int)$request['id']; ?> · <?php echo e(format_date($request['created_at'])); ?></span><div class="text-xs text-gray-600 max-w-xs mt-1"><?php echo e($request['description']); ?></div><?php if ($request['image_path']): ?><a class="text-xs text-primary font-semibold" href="<?php echo e(attachment_url('maintenance', (int)$request['id'])); ?>" target="_blank" rel="noopener">View photo<span class="sr-only"> (opens in a new tab)</span></a><?php endif; ?></td>
                 <td class="p-4 align-top"><?php echo e($request['property_name'] . ' / ' . $request['unit_number']); ?></td>
                 <td class="p-4 align-top"><?php echo e($request['tenant_name']); ?><div class="text-xs text-gray-500"><a href="tel:<?php echo e($request['tenant_phone']); ?>"><?php echo e($request['tenant_phone']); ?></a></div></td>
                 <td class="p-4 align-top"><?php echo render_status_badge($request['priority']); ?></td>

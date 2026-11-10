@@ -56,6 +56,14 @@ crud_run([
                     <input id="generate-period" type="month" name="period" required value="<?php echo e(date('Y-m')); ?>" pattern="\d{4}-\d{2}" class="px-3 py-2 border border-gray-300 rounded-lg text-sm"></div>
                 <button type="submit" class="btn btn-accent"><i class="fa-solid fa-bolt" aria-hidden="true"></i> Generate</button>
             </form>
+            <form method="post" class="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex flex-col sm:flex-row sm:items-end gap-4" data-confirm="Send an arrears reminder to every tenant with an overdue balance?">
+                <?php echo csrf_field(); ?><input type="hidden" name="_action" value="remind">
+                <div class="flex-1">
+                    <h2 class="font-bold text-gray-900">Arrears reminders</h2>
+                    <p class="text-sm text-gray-500">Sends an in-system notice to each tenant with an overdue balance, stating the amount and the oldest unpaid due date. Tenants reminded in the last 24 hours are skipped.</p>
+                </div>
+                <button type="submit" class="btn btn-secondary"><i class="fa-solid fa-bell" aria-hidden="true"></i> Send reminders</button>
+            </form>
         <?php },
     ],
     'actions' => [
@@ -67,6 +75,11 @@ crud_run([
             $db->commit();
             logAuditAction('GENERATE', 'rent_charges', null, "Generated $created rent charges for $period");
             return "Created $created charge(s) for " . format_period($period) . ($skipped ? "; $skipped lease(s) were already charged." : '.');
+        },
+        'remind' => function (PDO $db) {
+            [$sent, $skipped] = send_arrears_reminders($db);
+            logAuditAction('REMIND', 'rent_charges', null, "Sent $sent arrears reminder(s); skipped $skipped");
+            return "Sent $sent arrears reminder(s)." . ($skipped ? " $skipped tenant(s) were skipped: reminded in the last 24 hours or no portal login." : '');
         },
     ],
     'hooks' => [

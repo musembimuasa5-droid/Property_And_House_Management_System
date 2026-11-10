@@ -30,8 +30,10 @@ function app_modules(): array {
         'tenants' => $module('Tenancy', 'Tenants', 'fa-users', 'admin/tenants.php', $managers),
         'leases' => $module('Tenancy', 'Leases', 'fa-file-signature', 'admin/leases.php', $managers),
         'viewings' => $module('Tenancy', 'Viewing Requests', 'fa-calendar-check', 'admin/viewings.php', $managers),
+        'condition_reports' => $module('Tenancy', 'Condition Reports', 'fa-clipboard-check', 'admin/condition-reports.php', $managers),
         'rent_charges' => $module('Finance', 'Rent Charges', 'fa-file-invoice-dollar', 'admin/rent-charges.php', $finance),
         'payments' => $module('Finance', 'Payments', 'fa-money-bill-wave', 'admin/payments.php', $finance),
+        'deposits' => $module('Finance', 'Deposit Ledger', 'fa-vault', 'admin/deposits.php', $finance),
         'utility_readings' => $module('Finance', 'Utility Readings', 'fa-droplet', 'admin/utility-readings.php', $finance),
         'utility_types' => $module('Finance', 'Utility Types', 'fa-gauge', 'admin/utility-types.php', $finance),
         'expenses' => $module('Finance', 'Expenses', 'fa-receipt', 'admin/expenses.php', $finance),
@@ -41,9 +43,11 @@ function app_modules(): array {
         'notices' => $module('Operations', 'Notices', 'fa-bullhorn', 'admin/notices.php', $managers),
         'reports' => $module('Insights', 'Reports', 'fa-chart-line', 'admin/reports.php', $finance),
         'users' => $module('Administration', 'User Accounts', 'fa-user-shield', 'admin/users.php', ['Super Admin']),
+        'audit_log' => $module('Administration', 'Audit Log', 'fa-clock-rotate-left', 'admin/audit-log.php', ['Super Admin']),
         // Landlords manage their own buildings and units; leases and payments stay with management.
         'my_properties' => $module('My portfolio', 'My Properties', 'fa-building', 'landlord/properties.php', ['Landlord'], 'landlord'),
         'my_units' => $module('My portfolio', 'My Units', 'fa-door-open', 'landlord/units.php', ['Landlord'], 'landlord'),
+        'my_condition_reports' => $module('My portfolio', 'Condition Reports', 'fa-clipboard-check', 'landlord/condition-reports.php', ['Landlord'], 'landlord'),
         'my_reports' => $module('Insights', 'Reports', 'fa-chart-line', 'landlord/reports.php', ['Landlord'], 'landlord'),
     ];
 }

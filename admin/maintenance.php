@@ -35,7 +35,7 @@ crud_run([
         'description' => ['label' => 'Description', 'type' => 'textarea', 'required' => true],
     ],
     'list' => [
-        'sql' => 'SELECT mr.id, mr.category, mr.description, mr.priority, mr.status, mr.created_at, mr.assigned_staff, mr.property_id, mr.actual_cost,
+        'sql' => 'SELECT mr.id, mr.category, mr.description, mr.priority, mr.status, mr.created_at, mr.assigned_staff, mr.property_id, mr.actual_cost, mr.image_path,
                 t.full_name AS tenant_name, p.name AS property_name, u.unit_number, s.full_name AS staff_name
             FROM maintenance_requests mr JOIN tenants t ON t.id = mr.tenant_id JOIN properties p ON p.id = mr.property_id JOIN units u ON u.id = mr.unit_id
             LEFT JOIN users s ON s.id = mr.assigned_staff',
@@ -55,6 +55,8 @@ crud_run([
             'assigned_staff' => ['label' => 'Assigned to', 'column' => 'mr.assigned_staff', 'options_sql' => $staffOptions],
         ],
         'order' => "mr.status IN ('Completed', 'Cancelled'), FIELD(mr.priority, 'Emergency', 'High', 'Medium', 'Low'), mr.created_at DESC",
+        'row_actions' => fn($row) => '<a class="btn btn-small btn-secondary" href="' . e(BASE_URL . '/admin/maintenance-history.php?id=' . (int)$row['id']) . '">History'
+            . ($row['image_path'] ? ' <i class="fa-solid fa-camera" aria-hidden="true"></i><span class="sr-only"> (has photo)</span>' : '') . '</a>',
     ],
     'hooks' => [
         'prepare' => function (array $data, ?array $old, PDO $db) {
@@ -68,7 +70,17 @@ crud_run([
             return $data;
         },
         'after_save' => function (PDO $db, int $id, array $data, ?array $old) {
-            if (!empty($data['assigned_staff']) && (int)($old['assigned_staff'] ?? 0) !== (int)$data['assigned_staff']) {
+            $reassigned = !empty($data['assigned_staff']) && (int)($old['assigned_staff'] ?? 0) !== (int)$data['assigned_staff'];
+            if (!$old || $old['status'] !== $data['status'] || $reassigned) {
+                $note = !$old ? 'Logged by management' : 'Updated by management';
+                if ($reassigned) {
+                    $staff = $db->prepare('SELECT full_name FROM users WHERE id = ?');
+                    $staff->execute([$data['assigned_staff']]);
+                    $note .= '; assigned to ' . $staff->fetchColumn();
+                }
+                record_maintenance_update($db, $id, $data['status'], $note);
+            }
+            if ($reassigned) {
                 notify_user($db, (int)$data['assigned_staff'], 'New maintenance assignment', "Request #$id ({$data['category']}, {$data['priority']} priority) has been assigned to you.");
             }
             if ($old && $old['status'] !== $data['status']) {

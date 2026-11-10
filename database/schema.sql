@@ -128,6 +128,7 @@ CREATE TABLE IF NOT EXISTS leases (
     deposit DECIMAL(12, 2) NOT NULL,
     payment_due_day INT DEFAULT 5,
     notice_period_days INT DEFAULT 30,
+    rent_review_date DATE NULL,
     status ENUM('Active', 'Expired', 'Terminated', 'Pending', 'Renewed') DEFAULT 'Pending',
     special_terms TEXT,
     document_path VARCHAR(255),
@@ -341,7 +342,81 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     module VARCHAR(50) NOT NULL,
     record_id INT NULL,
     description TEXT NOT NULL,
+    old_values TEXT NULL,
+    new_values TEXT NULL,
     ip_address VARCHAR(45),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_audit_logs_created (created_at),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+-- 21. Condition Reports (move-in / move-out inspections; also in migrations/002)
+CREATE TABLE IF NOT EXISTS condition_reports (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    lease_id INT NOT NULL,
+    report_type ENUM('Move-in', 'Move-out') NOT NULL,
+    inspection_date DATE NOT NULL,
+    overall_condition ENUM('Excellent', 'Good', 'Fair', 'Poor') NOT NULL,
+    general_notes TEXT NULL,
+    inspected_by INT NOT NULL,
+    tenant_response ENUM('Pending', 'Agreed', 'Disputed') NOT NULL DEFAULT 'Pending',
+    tenant_comment TEXT NULL,
+    responded_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_lease_report (lease_id, report_type),
+    FOREIGN KEY (lease_id) REFERENCES leases(id) ON DELETE RESTRICT,
+    FOREIGN KEY (inspected_by) REFERENCES users(id) ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+-- 22. Condition Report Items (one checklist line per area)
+CREATE TABLE IF NOT EXISTS condition_report_items (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    report_id INT NOT NULL,
+    area VARCHAR(60) NOT NULL,
+    item_condition ENUM('Good', 'Fair', 'Poor', 'Damaged', 'Missing') NOT NULL,
+    remarks VARCHAR(255) NULL,
+    photo_path VARCHAR(255) NULL,
+    UNIQUE KEY unique_report_area (report_id, area),
+    FOREIGN KEY (report_id) REFERENCES condition_reports(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- 23. Deposit Transactions (deposit ledger: received, deductions, refunds)
+CREATE TABLE IF NOT EXISTS deposit_transactions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    lease_id INT NOT NULL,
+    transaction_type ENUM('Received', 'Deduction', 'Refund') NOT NULL,
+    amount DECIMAL(12, 2) NOT NULL,
+    transaction_date DATE NOT NULL,
+    reason VARCHAR(255) NULL,
+    condition_report_id INT NULL,
+    reference VARCHAR(100) NULL,
+    recorded_by INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_deposit_lease (lease_id),
+    FOREIGN KEY (lease_id) REFERENCES leases(id) ON DELETE RESTRICT,
+    FOREIGN KEY (condition_report_id) REFERENCES condition_reports(id) ON DELETE SET NULL,
+    FOREIGN KEY (recorded_by) REFERENCES users(id) ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+-- 24. Maintenance Updates (time-stamped status history)
+CREATE TABLE IF NOT EXISTS maintenance_updates (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    request_id INT NOT NULL,
+    status ENUM('Submitted', 'Reviewed', 'Assigned', 'In Progress', 'Waiting', 'Completed', 'Cancelled') NOT NULL,
+    note VARCHAR(255) NULL,
+    updated_by INT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_maintenance_updates_request (request_id),
+    FOREIGN KEY (request_id) REFERENCES maintenance_requests(id) ON DELETE CASCADE,
+    FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+-- 25. Login Attempts (failed sign-ins, for throttling)
+CREATE TABLE IF NOT EXISTS login_attempts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(150) NOT NULL,
+    ip_address VARCHAR(45) NOT NULL,
+    attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_login_attempts_email (email, attempted_at),
+    INDEX idx_login_attempts_ip (ip_address, attempted_at)
 ) ENGINE=InnoDB;

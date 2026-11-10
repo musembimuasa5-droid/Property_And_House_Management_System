@@ -323,9 +323,29 @@ function crud_save(PDO $db, array $r): void {
     foreach ($r['fields'] as $name => $field) {
         if (($field['type'] ?? '') === 'image' && isset($data[$name]) && $old) crud_delete_upload($old[$name] ?? null);
     }
-    logAuditAction($isCreate ? 'CREATE' : 'UPDATE', $r['table'], $id, ($isCreate ? 'Created ' : 'Updated ') . strtolower($r['singular']) . " #$id");
+    [$before, $after] = crud_changes($old, $data);
+    logAuditAction($isCreate ? 'CREATE' : 'UPDATE', $r['table'], $id, ($isCreate ? 'Created ' : 'Updated ') . strtolower($r['singular']) . " #$id", $before, $after);
     set_flash('success', $r['singular'] . ($isCreate ? ' created.' : ' updated.'));
     crud_redirect($r);
+}
+
+/**
+ * Before and after values of the fields a save changed, for the audit log.
+ * A create has no "before"; numbers are compared by value so 25000 equals "25000.00".
+ */
+function crud_changes(?array $old, array $data): array {
+    if ($old === null) return [null, $data];
+    $before = [];
+    $after = [];
+    foreach ($data as $field => $value) {
+        $was = $old[$field] ?? null;
+        $same = is_numeric($was) && is_numeric($value) ? (float)$was === (float)$value : (string)$was === (string)$value;
+        if (!$same) {
+            $before[$field] = $was;
+            $after[$field] = $value;
+        }
+    }
+    return [$before, $after];
 }
 
 function crud_delete(PDO $db, array $r): void {
@@ -353,7 +373,7 @@ function crud_delete(PDO $db, array $r): void {
     foreach ($r['fields'] as $name => $field) {
         if (($field['type'] ?? '') === 'image') crud_delete_upload($old[$name] ?? null);
     }
-    logAuditAction('DELETE', $r['table'], $id, 'Deleted ' . strtolower($r['singular']) . " #$id");
+    logAuditAction('DELETE', $r['table'], $id, 'Deleted ' . strtolower($r['singular']) . " #$id", $old);
     set_flash('success', $r['singular'] . ' deleted.');
     crud_redirect($r);
 }

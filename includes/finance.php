@@ -107,6 +107,74 @@ function sync_unit_occupancy(PDO $db, int $unit_id): void {
     }
 }
 
+const ARREARS_REMINDER_TITLE = 'Rent arrears reminder';
+
+/**
+ * Notify every tenant with an overdue balance, at most once a day each. Tenants without a
+ * portal login cannot receive in-system notices. Returns [sent, skipped].
+ */
+function send_arrears_reminders(PDO $db): array {
+    $overdue = $db->query("SELECT t.id, t.user_id, t.full_name, SUM(rc.total_due - COALESCE(pa.paid, 0)) AS overdue, MIN(rc.due_date) AS oldest_due
+        FROM rent_charges rc JOIN tenants t ON t.id = rc.tenant_id LEFT JOIN " . CHARGE_PAID_SUBQUERY . " pa ON pa.rent_charge_id = rc.id
+        WHERE rc.due_date < CURDATE() AND rc.total_due - COALESCE(pa.paid, 0) > 0.004
+        GROUP BY t.id, t.user_id, t.full_name")->fetchAll();
+    $recent = $db->prepare('SELECT COUNT(*) FROM notifications WHERE user_id = ? AND title = ? AND created_at > NOW() - INTERVAL 1 DAY');
+    $sent = 0;
+    $skipped = 0;
+    foreach ($overdue as $tenant) {
+        $recent->execute([(int)$tenant['user_id'], ARREARS_REMINDER_TITLE]);
+        if (!$tenant['user_id'] || (int)$recent->fetchColumn() > 0) { $skipped++; continue; }
+        notify_user($db, (int)$tenant['user_id'], ARREARS_REMINDER_TITLE, 'Your rent account is overdue by ' . format_currency($tenant['overdue'])
+            . ' (oldest unpaid charge due ' . format_date($tenant['oldest_due']) . '). Please pay and share the payment reference with management. See Rent & Statement for details.');
+        $sent++;
+    }
+    return [$sent, $skipped];
+}
+
+/**
+ * Deposit position of a lease: agreed amount and the ledger totals. $excludeId leaves one
+ * transaction out, so an edit can be checked against the other entries.
+ */
+function deposit_summary(PDO $db, int $lease_id, int $excludeId = 0): array {
+    $stmt = $db->prepare("SELECT l.deposit AS agreed, l.status AS lease_status,
+            COALESCE(SUM(CASE WHEN d.transaction_type = 'Received' THEN d.amount END), 0) AS received,
+            COALESCE(SUM(CASE WHEN d.transaction_type = 'Deduction' THEN d.amount END), 0) AS deducted,
+            COALESCE(SUM(CASE WHEN d.transaction_type = 'Refund' THEN d.amount END), 0) AS refunded
+        FROM leases l LEFT JOIN deposit_transactions d ON d.lease_id = l.id AND d.id <> ?
+        WHERE l.id = ? GROUP BY l.id, l.deposit, l.status");
+    $stmt->execute([$excludeId, $lease_id]);
+    $row = $stmt->fetch() ?: ['agreed' => 0, 'lease_status' => null, 'received' => 0, 'deducted' => 0, 'refunded' => 0];
+    foreach (['agreed', 'received', 'deducted', 'refunded'] as $key) $row[$key] = round((float)$row[$key], 2);
+    $row['held'] = round($row['received'] - $row['deducted'] - $row['refunded'], 2);
+    $row['status'] = deposit_status((string)$row['lease_status'], $row['agreed'], $row['received'], $row['held']);
+    return $row;
+}
+
+/** Plain-language state of a deposit, used on the ledger, the tenant page and the report. */
+function deposit_status(string $leaseStatus, float $agreed, float $received, float $held): string {
+    if ($received <= 0) return 'Not received';
+    if (in_array($leaseStatus, ['Terminated', 'Expired'], true)) return $held > 0.004 ? 'Due for refund' : 'Settled';
+    return $received + 0.004 < $agreed ? 'Part received' : 'Held';
+}
+
+/**
+ * Check a deposit entry against the ledger: money received may not exceed the agreed
+ * deposit, and deductions plus refunds may not exceed what is held. Returns an error or null.
+ */
+function deposit_entry_error(PDO $db, int $lease_id, string $type, float $amount, int $excludeId = 0): ?string {
+    $summary = deposit_summary($db, $lease_id, $excludeId);
+    if ($type === 'Received') {
+        if ($summary['received'] + $amount > $summary['agreed'] + 0.004) {
+            return 'That would make ' . format_currency($summary['received'] + $amount) . ' received, more than the agreed deposit of ' . format_currency($summary['agreed']) . '.';
+        }
+        return null;
+    }
+    if ($amount > $summary['held'] + 0.004) {
+        return 'Deductions and refunds cannot exceed the ' . format_currency($summary['held']) . ' still held for this lease.';
+    }
+    return null;
+}
+
 /** SQL fragment: amount allocated to each rent charge. Join as "pa" on pa.rent_charge_id = rc.id. */
 const CHARGE_PAID_SUBQUERY = '(SELECT rent_charge_id, SUM(allocated_amount) AS paid FROM payment_allocations GROUP BY rent_charge_id)';
 
