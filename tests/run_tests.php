@@ -179,8 +179,8 @@ TestKit::add('IT-01', 'Payment applied to the oldest charge first', 'Lease with 
     'September Paid with KSh 10,000 allocated; October receives KSh 5,000 and is Overdue', function () use ($db) {
         return in_rollback($db, function (PDO $db) {
             $lease = it_lease($db);
-            $sep = it_charge($db, $lease, '2026-09', 10000);
-            $oct = it_charge($db, $lease, '2026-10', 10000);
+            it_charge($db, $lease, '2026-09', 10000);
+            it_charge($db, $lease, '2026-10', 10000);
             it_payment($db, $lease, 15000, '2026-10-10');
             recalculate_lease_balances($db, $lease);
             $status = $db->query("SELECT id, status, (SELECT COALESCE(SUM(allocated_amount),0) FROM payment_allocations WHERE rent_charge_id = rc.id) paid FROM rent_charges rc WHERE lease_id = $lease ORDER BY billing_period")->fetchAll();
@@ -279,7 +279,7 @@ TestKit::add('ST-01', 'Each role signs in to its own dashboard', 'Test accounts 
         $expect = ['admin' => '/admin/dashboard.php', 'manager' => '/admin/dashboard.php', 'accountant' => '/admin/dashboard.php',
             'landlord' => '/landlord/dashboard.php', 'caretaker' => '/caretaker/dashboard.php', 'tenant' => '/tenant/dashboard.php'];
         $seen = [];
-        foreach ($expect as $account => $path) {
+        foreach (array_keys($expect) as $account) {
             $browser = new Browser($base);
             $seen[$account] = path_of($browser->login("$account@urbanescape.test", PW)['location']);
         }
@@ -635,6 +635,14 @@ TestKit::add('ST-37', 'Audit log shows sign-ins and changes, for Super Admin onl
         check(str_contains($logins, 'Signed in') && str_contains($updates, '→') && $update > 0 && str_contains((string)$manager['location'], 'forbidden'),
             'LOGIN entries: ' . (str_contains($logins, 'Signed in') ? 'yes' : 'no') . '; arrow shown: ' . (str_contains($updates, '→') ? 'yes' : 'no'));
         return "Entries listed with before → after values ($update updates logged); Property Manager redirected as forbidden";
+    });
+
+TestKit::add('ST-38', 'Refused or expired access is explained to the user', 'Tenant signed in; a separate visitor not signed in', ['Tenant opens a staff page and follows the redirect', 'Visitor opens the tenant dashboard and follows the redirect'],
+    'Tenant sees "You do not have permission to open that page" with a link back; visitor sees "Please sign in to continue."', function () use ($base) {
+        $tenant = signed_in('tenant@urbanescape.test')->open('/admin/payments.php')['body'];
+        $visitor = (new Browser($base))->open('/tenant/dashboard.php')['body'];
+        check(str_contains($tenant, 'You do not have permission to open that page') && str_contains($tenant, 'Return to your dashboard') && str_contains($visitor, 'Please sign in to continue.'), 'Explanations missing');
+        return 'Tenant: "You do not have permission to open that page. Return to your dashboard."; visitor: "Please sign in to continue."';
     });
 
 // ===========================================================================

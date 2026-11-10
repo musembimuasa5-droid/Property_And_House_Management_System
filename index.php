@@ -47,6 +47,7 @@ include __DIR__ . '/includes/navbar.php';
 ?>
 <main id="main-content" class="landing-page">
   <?php if (($_GET['error'] ?? '') === 'role_portal_unavailable'): ?><div class="site-container"><p class="notice notice-warning" role="status">Your account does not have a dashboard available in this version of the system. Please contact your system administrator.</p></div><?php endif; ?>
+  <?php if (($_GET['error'] ?? '') === 'forbidden'): ?><div class="site-container"><p class="notice notice-warning" role="alert">You do not have permission to open that page. <?php if (isLoggedIn()): ?><a class="text-link" href="<?php echo e(BASE_URL . '/' . dashboardPathForRole(getCurrentUser()['role_name'])); ?>">Return to your dashboard</a>.<?php else: ?>Please sign in with an account that has access.<?php endif; ?></p></div><?php endif; ?>
 
   <section class="hero-section" aria-labelledby="hero-title">
     <div class="site-container hero-layout">

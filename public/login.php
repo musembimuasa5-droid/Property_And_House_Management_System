@@ -12,6 +12,8 @@ $notice = '';
 if (!empty($_SESSION['session_expired'])) {
     $notice = 'You were signed out after 30 minutes without activity. Please sign in again.';
     unset($_SESSION['session_expired']);
+} elseif (($_GET['error'] ?? '') === 'unauthorized') {
+    $notice = 'Please sign in to continue.';
 }
 $email = '';
 
