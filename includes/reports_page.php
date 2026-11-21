@@ -23,7 +23,7 @@ $propertyStmt = $db->prepare($propertySql);
 $propertyStmt->execute($reportLandlordId ? [$reportLandlordId] : []);
 $properties = $propertyStmt->fetchAll(PDO::FETCH_KEY_PAIR);
 if ($params['property_id'] && !isset($properties[$params['property_id']])) $params['property_id'] = null;
-$tenants = $reportKey === 'statement' ? $db->query("SELECT id, CONCAT(full_name, ' — ID ', national_id) FROM tenants ORDER BY full_name")->fetchAll(PDO::FETCH_KEY_PAIR) : [];
+$tenants = $reportKey === 'statement' ? report_statement_tenants($db, $reportLandlordId) : [];
 
 $report = run_report($db, $reportKey, $params);
 $query = array_filter(['report' => $reportKey, 'from' => $params['from'], 'to' => $params['to'], 'property_id' => $params['property_id'], 'tenant_id' => $params['tenant_id']]);

@@ -75,6 +75,11 @@ function render_status_badge($status) {
         'Unpaid' => $red, 'Overdue' => $red, 'Rejected' => $red, 'Terminated' => $red, 'Emergency' => $red,
         'Suspended' => $red, 'Evicted' => $red, 'Blacklisted' => $red,
         'Under Maintenance' => $purple, 'Reserved' => $purple,
+        // Deposits and condition reports
+        'Received' => $green, 'Held' => $blue, 'Settled' => $green, 'Agreed' => $green, 'Excellent' => $green, 'Good' => $green,
+        'Refund' => $blue, 'Move-in' => $blue, 'Move-out' => $purple,
+        'Deduction' => $orange, 'Part received' => $orange, 'Due for refund' => $orange, 'Fair' => $yellow, 'Poor' => $orange,
+        'Disputed' => $red, 'Not received' => $red, 'Damaged' => $red, 'Missing' => $red,
     ];
 
     $class = $colors[$status] ?? 'bg-gray-100 text-gray-800';
@@ -103,6 +108,24 @@ function notify_roles(PDO $db, array $roles, $title, $message) {
 
 /** Roles alerted about new public and tenant requests. */
 const MANAGEMENT_ROLES = ['Super Admin', 'Property Manager'];
+
+/** Add a line to a maintenance request's time-stamped history. */
+function record_maintenance_update(PDO $db, int $requestId, string $status, ?string $note = null, ?int $userId = null) {
+    $db->prepare('INSERT INTO maintenance_updates (request_id, status, note, updated_by) VALUES (?, ?, ?, ?)')
+        ->execute([$requestId, $status, $note !== null ? mb_substr($note, 0, 255) : null, $userId ?? ($_SESSION['user_id'] ?? null)]);
+}
+
+/** History of a maintenance request, oldest first, with the name of whoever made each change. */
+function maintenance_history(PDO $db, int $requestId): array {
+    $stmt = $db->prepare('SELECT mu.status, mu.note, mu.created_at, u.full_name FROM maintenance_updates mu LEFT JOIN users u ON u.id = mu.updated_by WHERE mu.request_id = ? ORDER BY mu.created_at, mu.id');
+    $stmt->execute([$requestId]);
+    return $stmt->fetchAll();
+}
+
+/** Link to a protected upload (maintenance or condition photo), served after an access check. */
+function attachment_url(string $type, int $id) {
+    return BASE_URL . '/account/attachment.php?' . http_build_query(['type' => $type, 'id' => $id]);
+}
 
 /** Listing photo for a property: its uploaded image, else a labelled sample. Returns [url path, is sample]. */
 function property_image(array $property) {

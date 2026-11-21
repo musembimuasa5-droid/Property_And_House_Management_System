@@ -323,9 +323,29 @@ function crud_save(PDO $db, array $r): void {
     foreach ($r['fields'] as $name => $field) {
         if (($field['type'] ?? '') === 'image' && isset($data[$name]) && $old) crud_delete_upload($old[$name] ?? null);
     }
-    logAuditAction($isCreate ? 'CREATE' : 'UPDATE', $r['table'], $id, ($isCreate ? 'Created ' : 'Updated ') . strtolower($r['singular']) . " #$id");
+    [$before, $after] = crud_changes($old, $data);
+    logAuditAction($isCreate ? 'CREATE' : 'UPDATE', $r['table'], $id, ($isCreate ? 'Created ' : 'Updated ') . strtolower($r['singular']) . " #$id", $before, $after);
     set_flash('success', $r['singular'] . ($isCreate ? ' created.' : ' updated.'));
     crud_redirect($r);
+}
+
+/**
+ * Before and after values of the fields a save changed, for the audit log.
+ * A create has no "before"; numbers are compared by value so 25000 equals "25000.00".
+ */
+function crud_changes(?array $old, array $data): array {
+    if ($old === null) return [null, $data];
+    $before = [];
+    $after = [];
+    foreach ($data as $field => $value) {
+        $was = $old[$field] ?? null;
+        $same = is_numeric($was) && is_numeric($value) ? (float)$was === (float)$value : (string)$was === (string)$value;
+        if (!$same) {
+            $before[$field] = $was;
+            $after[$field] = $value;
+        }
+    }
+    return [$before, $after];
 }
 
 function crud_delete(PDO $db, array $r): void {
@@ -353,7 +373,7 @@ function crud_delete(PDO $db, array $r): void {
     foreach ($r['fields'] as $name => $field) {
         if (($field['type'] ?? '') === 'image') crud_delete_upload($old[$name] ?? null);
     }
-    logAuditAction('DELETE', $r['table'], $id, 'Deleted ' . strtolower($r['singular']) . " #$id");
+    logAuditAction('DELETE', $r['table'], $id, 'Deleted ' . strtolower($r['singular']) . " #$id", $old);
     set_flash('success', $r['singular'] . ' deleted.');
     crud_redirect($r);
 }
@@ -418,6 +438,7 @@ function crud_render_list(PDO $db, array $r): void {
     $columns = $r['list']['columns'];
     $canEdit = crud_can($r, 'edit');
     $canDelete = crud_can($r, 'delete');
+    $hasActions = $canEdit || $canDelete || $r['list']['row_actions'];
 
     $page_title = $r['plural'];
     include __DIR__ . '/layout_top.php';
@@ -456,16 +477,16 @@ function crud_render_list(PDO $db, array $r): void {
         <div class="overflow-x-auto"><table class="w-full text-left border-collapse">
             <thead><tr class="bg-gray-50 text-xs font-semibold text-gray-500 uppercase">
                 <?php foreach ($columns as $column): ?><th scope="col" class="p-4"><?php echo e($column['label']); ?></th><?php endforeach; ?>
-                <th scope="col" class="p-4 text-right">Actions</th>
+                <?php if ($hasActions): ?><th scope="col" class="p-4 text-right">Actions</th><?php endif; ?>
             </tr></thead>
             <tbody class="divide-y divide-gray-100 text-sm">
             <?php if (!$rows): ?>
-                <tr><td colspan="<?php echo count($columns) + 1; ?>" class="p-8 text-center text-gray-500">No <?php echo e(strtolower($r['plural'])); ?> found<?php echo $active ? ' for these filters' : ''; ?>.</td></tr>
+                <tr><td colspan="<?php echo count($columns) + ($hasActions ? 1 : 0); ?>" class="p-8 text-center text-gray-500">No <?php echo e(strtolower($r['plural'])); ?> found<?php echo $active ? ' for these filters' : ''; ?>.</td></tr>
             <?php endif; ?>
             <?php foreach ($rows as $row): ?>
                 <tr>
                     <?php foreach ($columns as $key => $column): ?><td class="p-4 align-top"><?php echo crud_cell($column, $row, $key); ?></td><?php endforeach; ?>
-                    <td class="p-4 align-top"><div class="row-actions">
+                    <?php if ($hasActions): ?><td class="p-4 align-top"><div class="row-actions">
                         <?php if ($r['list']['row_actions']) echo $r['list']['row_actions']($row); ?>
                         <?php if ($canEdit): ?><a class="btn btn-small btn-secondary" href="<?php echo e($r['url'] . '?action=edit&id=' . (int)$row['id']); ?>">Edit</a><?php endif; ?>
                         <?php if ($canDelete): ?>
@@ -474,7 +495,7 @@ function crud_render_list(PDO $db, array $r): void {
                             <button type="submit" class="btn btn-small btn-danger">Delete</button>
                         </form>
                         <?php endif; ?>
-                    </div></td>
+                    </div></td><?php endif; ?>
                 </tr>
             <?php endforeach; ?>
             </tbody>

@@ -12,6 +12,7 @@
 /uploads/tenants/*
 /uploads/documents/*
 /uploads/maintenance/*
+/uploads/condition/*
 !/uploads/properties/.gitkeep
 !/uploads/tenants/.gitkeep
 !/uploads/documents/.gitkeep
@@ -20,6 +21,7 @@
 !/uploads/tenants/.htaccess
 !/uploads/documents/.htaccess
 !/uploads/maintenance/.htaccess
+!/uploads/condition/.htaccess
 
 # Logs and temporary files
 *.log

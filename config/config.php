@@ -1,7 +1,7 @@
 <?php
 
 // =====================================================
-// Nairobi Property & House Management System
+// Urban Escape Property & House Management System
 // Global Configuration
 // =====================================================
 
@@ -31,12 +31,25 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// Sign a user out after 30 minutes without activity, so an unattended browser
+// does not stay open on tenant or financial records.
+const SESSION_IDLE_SECONDS = 1800;
+if (!empty($_SESSION['user_id'])) {
+    if (isset($_SESSION['last_activity']) && time() - $_SESSION['last_activity'] > SESSION_IDLE_SECONDS) {
+        $_SESSION = [];
+        session_regenerate_id(true);
+        $_SESSION['session_expired'] = true;
+    } else {
+        $_SESSION['last_activity'] = time();
+    }
+}
+
 
 // =====================================================
 // APPLICATION SETTINGS
 // =====================================================
 
-define('APP_NAME', getenv('APP_NAME') ?: 'Nairobi Property Manager');
+define('APP_NAME', getenv('APP_NAME') ?: 'Urban Escape');
 
 define('APP_ENV', getenv('APP_ENV') ?: 'development');
 

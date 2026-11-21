@@ -32,7 +32,9 @@ include __DIR__ . '/../includes/layout_top.php';
                             <li class="py-3 flex items-center justify-between">
                                 <div>
                                     <p class="font-bold text-gray-900"><?php echo e($l['property_name'] . ' - Unit ' . $l['unit_number']); ?></p>
-                                    <p class="text-xs text-gray-500">Period: <?php echo e($l['start_date'] . ' to ' . ($l['end_date'] ?? 'Indefinite')); ?></p>
+                                    <p class="text-xs text-gray-500">Period: <?php echo e(format_date($l['start_date']) . ' to ' . format_date($l['end_date'])); ?></p>
+                                    <p class="text-xs text-gray-500">Rent <?php echo format_currency($l['monthly_rent']); ?> due on day <?php echo (int)$l['payment_due_day']; ?> · deposit <?php echo format_currency($l['deposit']); ?> · notice <?php echo (int)$l['notice_period_days']; ?> days<?php echo !empty($l['rent_review_date']) ? ' · rent review ' . e(format_date($l['rent_review_date'])) : ''; ?></p>
+                                    <?php if ($l['special_terms']): ?><p class="text-xs text-gray-500">Terms: <?php echo e($l['special_terms']); ?></p><?php endif; ?>
                                 </div>
                                 <?php echo render_status_badge($l['status']); ?>
                             </li>

@@ -10,6 +10,7 @@ require_once __DIR__ . '/../config/constants.php';
 
 const PROPERTY_STATUSES = ['Active', 'Under Maintenance', 'Archived'];
 const UNIT_STATUSES = ['Vacant', 'Occupied', 'Reserved', 'Under Maintenance', 'Unavailable'];
+const CARETAKER_OPTIONS_SQL = "SELECT u.id, u.full_name FROM users u JOIN roles r ON r.id = u.role_id WHERE r.name = 'Caretaker' AND u.status = 'Active' ORDER BY u.full_name";
 
 /** List thumbnail; decorative because the property name sits beside it. */
 function property_thumbnail(array $row): string {
@@ -26,6 +27,8 @@ function property_resource(?int $landlordId = null): array {
         'name' => ['label' => 'Property name', 'required' => true, 'max' => 150],
         'property_type' => ['label' => 'Property type', 'type' => 'select', 'options' => PROPERTY_TYPES, 'required' => true],
         'landlord_id' => ['label' => 'Landlord', 'type' => 'select', 'options_sql' => $landlordOptions, 'required' => true],
+        'caretaker_id' => ['label' => 'Caretaker', 'type' => 'select', 'options_sql' => CARETAKER_OPTIONS_SQL,
+            'help' => 'Optional. The caretaker sees the units of this property and records its inspections and meter readings.'],
         'location_id' => ['label' => 'Location', 'type' => 'select', 'options_sql' => "SELECT id, CONCAT(estate, ', ', sub_county) FROM locations ORDER BY sub_county, estate", 'required' => true,
             'help' => $own ? 'Missing an estate? Ask management to add it.' : 'Missing an estate? Add it under Locations first.'],
         'physical_address' => ['label' => 'Physical address', 'required' => true, 'max' => 255, 'wide' => true],
@@ -44,6 +47,7 @@ function property_resource(?int $landlordId = null): array {
         'property_type' => ['label' => 'Type'],
         'estate' => ['label' => 'Location', 'format' => fn($row) => e($row['estate'] . ', ' . $row['sub_county'])],
         'landlord_name' => ['label' => 'Landlord'],
+        'caretaker_name' => ['label' => 'Caretaker'],
         'unit_count' => ['label' => 'Units', 'format' => fn($row) => (int)$row['occupied_count'] . ' of ' . (int)$row['unit_count'] . ' occupied'],
         'status' => ['label' => 'Status', 'format' => 'badge'],
     ];
@@ -64,10 +68,10 @@ function property_resource(?int $landlordId = null): array {
             : 'Buildings in the portfolio with their landlord, location and listing photo.',
         'fields' => $fields,
         'list' => [
-            'sql' => "SELECT p.id, p.name, p.property_type, p.status, p.physical_address, p.property_image, l.estate, l.sub_county, ld.full_name AS landlord_name,
+            'sql' => "SELECT p.id, p.name, p.property_type, p.status, p.physical_address, p.property_image, l.estate, l.sub_county, ld.full_name AS landlord_name, ct.full_name AS caretaker_name,
                     (SELECT COUNT(*) FROM units u WHERE u.property_id = p.id) AS unit_count,
                     (SELECT COUNT(*) FROM units u WHERE u.property_id = p.id AND u.status = 'Occupied') AS occupied_count
-                FROM properties p JOIN locations l ON l.id = p.location_id JOIN landlords ld ON ld.id = p.landlord_id",
+                FROM properties p JOIN locations l ON l.id = p.location_id JOIN landlords ld ON ld.id = p.landlord_id LEFT JOIN users ct ON ct.id = p.caretaker_id",
             'columns' => $columns,
             'search' => ['p.name', 'p.physical_address', 'l.estate', 'ld.full_name'],
             'filters' => $filters,
@@ -100,6 +104,7 @@ function property_resource(?int $landlordId = null): array {
 function unit_resource(?int $landlordId = null): array {
     $own = $landlordId !== null;
     $propertyOptions = 'SELECT id, name FROM properties' . ($own ? ' WHERE landlord_id = ' . (int)$landlordId : '') . ' ORDER BY name';
+    $leasesModule = $own ? 'my_leases' : 'leases';
 
     $resource = [
         'module' => $own ? 'my_units' : 'units',
@@ -127,14 +132,16 @@ function unit_resource(?int $landlordId = null): array {
         ],
         'list' => [
             'sql' => "SELECT u.id, u.unit_number, u.floor, u.house_type, u.monthly_rent, u.status, u.property_id, p.name AS property_name,
-                    (SELECT t.full_name FROM leases l JOIN tenants t ON t.id = l.tenant_id WHERE l.unit_id = u.id AND l.status = 'Active' LIMIT 1) AS tenant_name
+                    (SELECT t.full_name FROM leases l JOIN tenants t ON t.id = l.tenant_id WHERE l.unit_id = u.id AND l.status = 'Active' LIMIT 1) AS tenant_name,
+                    (SELECT t.phone FROM leases l JOIN tenants t ON t.id = l.tenant_id WHERE l.unit_id = u.id AND l.status = 'Active' LIMIT 1) AS tenant_phone
                 FROM units u JOIN properties p ON p.id = u.property_id",
             'columns' => [
                 'unit_number' => ['label' => 'Unit', 'format' => fn($row) => '<strong>' . e($row['unit_number']) . '</strong><div class="text-xs text-gray-500">' . e($row['floor'] ?? '') . ' floor</div>'],
                 'property_name' => ['label' => 'Property'],
                 'house_type' => ['label' => 'Type'],
                 'monthly_rent' => ['label' => 'Rent', 'format' => 'currency'],
-                'tenant_name' => ['label' => 'Current tenant'],
+                'tenant_name' => ['label' => 'Current tenant', 'format' => fn($row) => $row['tenant_name'] === null ? '<span class="text-gray-400">—</span>'
+                    : e($row['tenant_name']) . '<div class="text-xs text-gray-500"><a href="tel:' . e($row['tenant_phone']) . '">' . e($row['tenant_phone']) . '</a></div>'],
                 'status' => ['label' => 'Status', 'format' => 'badge'],
             ],
             'search' => ['u.unit_number', 'p.name'],
@@ -144,8 +151,8 @@ function unit_resource(?int $landlordId = null): array {
                 'house_type' => ['label' => 'House type', 'column' => 'u.house_type', 'options' => UNIT_TYPES],
             ],
             'order' => 'p.name, u.unit_number',
-            'row_actions' => fn($row) => $row['status'] === 'Vacant' && user_can_access_module('leases')
-                ? '<a class="btn btn-small btn-accent" href="' . e(module_url('leases', ['action' => 'create', 'unit_id' => $row['id']])) . '">New lease</a>' : '',
+            'row_actions' => fn($row) => $row['status'] === 'Vacant' && user_can_access_module($leasesModule)
+                ? '<a class="btn btn-small btn-accent" href="' . e(module_url($leasesModule, ['action' => 'create', 'unit_id' => $row['id']])) . '">New lease</a>' : '',
         ],
         'messages' => ['duplicate' => 'This property already has a unit with that number.'],
         'hooks' => [
@@ -160,5 +167,23 @@ function unit_resource(?int $landlordId = null): array {
     if ($own) {
         $resource['scope'] = ['find' => 'property_id IN (SELECT id FROM properties WHERE landlord_id = ?)', 'list' => 'p.landlord_id = ?', 'params' => [$landlordId]];
     }
+    return $resource;
+}
+
+/**
+ * Read-only units of the properties a caretaker looks after, with the current tenant's phone,
+ * so the caretaker knows who to call before an inspection, a meter reading or a repair.
+ */
+function caretaker_unit_resource(int $caretakerUserId): array {
+    $resource = unit_resource();
+    $properties = 'SELECT id FROM properties WHERE caretaker_id = ' . $caretakerUserId;
+    $resource['module'] = 'care_units';
+    $resource['plural'] = 'Units I Look After';
+    $resource['description'] = 'Units in the properties assigned to you. Ask management to change unit details.';
+    $resource['allow_create'] = $resource['allow_edit'] = $resource['allow_delete'] = false;
+    $resource['scope'] = ['find' => "property_id IN ($properties)", 'list' => "u.property_id IN ($properties)", 'params' => []];
+    $resource['list']['filters']['property_id']['options_sql'] = "SELECT id, name FROM properties WHERE caretaker_id = $caretakerUserId ORDER BY name";
+    $resource['list']['row_actions'] = null;
+    unset($resource['list']['columns']['monthly_rent']);
     return $resource;
 }

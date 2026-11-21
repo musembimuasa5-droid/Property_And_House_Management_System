@@ -66,15 +66,58 @@ function requireLandlordProfile() {
     return $landlord;
 }
 
-function logAuditAction($action, $module, $record_id = null, $description = '') {
-    try {
-        $db = db();
-        $user_id = $_SESSION['user_id'] ?? null;
-        $ip = $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
+/** The signed-in caretaker's user id, which properties.caretaker_id refers to; other roles are refused. */
+function caretaker_user_id(): int {
+    requireRole('Caretaker');
+    return (int)$_SESSION['user_id'];
+}
 
-        $stmt = $db->prepare("INSERT INTO audit_logs (user_id, action, module, record_id, description, ip_address) VALUES (?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$user_id, $action, $module, $record_id, $description, $ip]);
+/** Fields never written to the audit log, even as before/after values. */
+const AUDIT_HIDDEN_FIELDS = ['password', 'password_hash', 'csrf_token'];
+
+/** JSON for the audit log's before/after columns, with secrets removed; null when empty. */
+function audit_values(?array $values): ?string {
+    if (!$values) return null;
+    $values = array_diff_key($values, array_flip(AUDIT_HIDDEN_FIELDS));
+    return $values ? json_encode($values, JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR) : null;
+}
+
+function logAuditAction($action, $module, $record_id = null, $description = '', ?array $old = null, ?array $new = null, $user_id = null) {
+    try {
+        $user_id = $user_id ?? ($_SESSION['user_id'] ?? null);
+        $ip = $_SERVER['REMOTE_ADDR'] ?? 'UNKNOWN';
+        $stmt = db()->prepare("INSERT INTO audit_logs (user_id, action, module, record_id, description, old_values, new_values, ip_address) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$user_id, $action, $module, $record_id, $description, audit_values($old), audit_values($new), $ip]);
     } catch (\Exception $e) {
-        // Fail silently to avoid breaking primary transaction
+        // The main change has already succeeded, so record the logging failure instead of undoing it.
+        error_log("Audit log write failed ($action $module #$record_id): " . $e->getMessage());
     }
+}
+
+// ---------------------------------------------------------------------------
+// Sign-in throttling
+// ---------------------------------------------------------------------------
+
+const LOGIN_WINDOW_MINUTES = 15;
+const LOGIN_MAX_FAILURES_PER_EMAIL = 5;
+const LOGIN_MAX_FAILURES_PER_IP = 20;
+
+/** True while an email address or client address has too many recent failed sign-ins. */
+function login_is_throttled(PDO $db, string $email, string $ip): bool {
+    $stmt = $db->prepare('SELECT
+            (SELECT COUNT(*) FROM login_attempts WHERE email = ? AND attempted_at > NOW() - INTERVAL ' . LOGIN_WINDOW_MINUTES . ' MINUTE),
+            (SELECT COUNT(*) FROM login_attempts WHERE ip_address = ? AND attempted_at > NOW() - INTERVAL ' . LOGIN_WINDOW_MINUTES . ' MINUTE)');
+    $stmt->execute([$email, $ip]);
+    [$byEmail, $byIp] = $stmt->fetch(PDO::FETCH_NUM);
+    return $byEmail >= LOGIN_MAX_FAILURES_PER_EMAIL || $byIp >= LOGIN_MAX_FAILURES_PER_IP;
+}
+
+function login_record_failure(PDO $db, string $email, string $ip): void {
+    $db->prepare('INSERT INTO login_attempts (email, ip_address) VALUES (?, ?)')->execute([$email, $ip]);
+    // Old rows have no further use; trimming here avoids a scheduled clean-up job.
+    $db->exec('DELETE FROM login_attempts WHERE attempted_at < NOW() - INTERVAL 1 DAY');
+}
+
+function login_clear_failures(PDO $db, string $email): void {
+    $db->prepare('DELETE FROM login_attempts WHERE email = ?')->execute([$email]);
 }

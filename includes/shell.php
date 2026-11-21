@@ -30,6 +30,7 @@ function shell_module_badges(): array {
         'enquiries' => "SELECT COUNT(*) FROM enquiries WHERE status = 'New'",
         'maintenance' => "SELECT COUNT(*) FROM maintenance_requests WHERE status = 'Submitted'",
         'complaints' => "SELECT COUNT(*) FROM complaints WHERE status = 'Open'",
+        'condition_reports' => "SELECT COUNT(*) FROM condition_reports WHERE tenant_response = 'Disputed'",
     ];
     $badges = [];
     foreach ($queries as $key => $sql) {

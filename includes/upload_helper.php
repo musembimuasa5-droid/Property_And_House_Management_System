@@ -8,7 +8,9 @@
  * @return array ['success' => bool, 'path' => string|null, 'error' => string|null]
  */
 function uploadApplicationFile($file, $subfolder, $allowed_extensions = ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx']) {
-    $allowedFolders = ['properties', 'tenants', 'documents', 'maintenance'];
+    // Every folder except "properties" (public listing photos) is closed to direct web
+    // access; its files are served by account/attachment.php after an access check.
+    $allowedFolders = ['properties', 'tenants', 'documents', 'maintenance', 'condition'];
     if (!in_array($subfolder, $allowedFolders, true)) {
         return ['success' => false, 'path' => null, 'error' => 'Invalid upload destination.'];
     }

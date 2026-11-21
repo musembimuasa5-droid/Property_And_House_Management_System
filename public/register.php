@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../config/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
 
 $error = '';
@@ -18,6 +19,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Your session expired. Please submit the form again.';
     } elseif (empty($full_name) || !filter_var($email, FILTER_VALIDATE_EMAIL) || empty($phone) || empty($national_id) || !in_array($gender, ['Male', 'Female', 'Other'], true) || strlen($password) < 10) {
         $error = 'Complete all fields with a valid email and a password of at least 10 characters.';
+    } elseif (mb_strlen($full_name) > 100 || mb_strlen($email) > 150 || !preg_match('/^\+?[0-9][0-9 ()-]{6,19}$/', $phone) || mb_strlen($national_id) > 50) {
+        $error = 'Check your details: enter a valid phone number such as +254712345678, and keep names and IDs short.';
+    } elseif (($_POST['privacy_consent'] ?? '') !== '1') {
+        $error = 'Please read the privacy notice and tick the box to agree before creating your account.';
     } else {
         $db = db();
         // Check if email exists
@@ -58,7 +63,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 $db->commit();
-                $success = $existing ? 'Account created and linked to your tenancy. You can now log in.' : 'Account created successfully! You can now log in.';
+                logAuditAction('REGISTER', 'users', (int)$user_id, 'Tenant self-registration' . ($existing ? ' linked to an existing tenant profile' : '') . '; privacy notice accepted', null, null, (int)$user_id);
+                $full_name = $email = $phone = $national_id = $gender = '';
+                $success = $existing ?'Account created and linked to your tenancy. You can now log in.' : 'Account created successfully! You can now log in.';
             } catch (PDOException $e) {
                 if ($db->inTransaction()) $db->rollBack();
                 error_log('Tenant registration failed: ' . $e->getMessage());
@@ -89,22 +96,27 @@ include __DIR__ . '/../includes/navbar.php';
         <form method="POST" class="space-y-4">
             <?php echo csrf_field(); ?>
             <div>
-                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Full Name</label>
-                <input type="text" name="full_name" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary">
+                <label for="reg-name" class="block text-xs font-semibold text-gray-500 uppercase mb-1">Full Name</label>
+                <input id="reg-name" type="text" name="full_name" required maxlength="100" autocomplete="name" value="<?php echo e($full_name ?? ''); ?>" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary">
             </div>
             <div>
-                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Email Address</label>
-                <input type="email" name="email" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary">
+                <label for="reg-email" class="block text-xs font-semibold text-gray-500 uppercase mb-1">Email Address</label>
+                <input id="reg-email" type="email" name="email" required maxlength="150" autocomplete="email" value="<?php echo e($email ?? ''); ?>" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary">
             </div>
             <div>
-                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Phone Number</label>
-                <input type="tel" name="phone" required placeholder="+2547..." class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary">
+                <label for="reg-phone" class="block text-xs font-semibold text-gray-500 uppercase mb-1">Phone Number</label>
+                <input id="reg-phone" type="tel" name="phone" required maxlength="20" autocomplete="tel" placeholder="+2547..." value="<?php echo e($phone ?? ''); ?>" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary">
             </div>
-            <div><label class="block text-xs font-semibold text-gray-500 uppercase mb-1">National ID</label><input type="text" name="national_id" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"></div>
-            <div><label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Gender</label><select name="gender" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"><option value="">Select</option><option>Female</option><option>Male</option><option>Other</option></select></div>
+            <div><label for="reg-national-id" class="block text-xs font-semibold text-gray-500 uppercase mb-1">National ID</label><input id="reg-national-id" type="text" name="national_id" required maxlength="50" value="<?php echo e($national_id ?? ''); ?>" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"></div>
+            <div><label for="reg-gender" class="block text-xs font-semibold text-gray-500 uppercase mb-1">Gender</label><select id="reg-gender" name="gender" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"><option value="">Select</option><?php foreach (['Female', 'Male', 'Other'] as $option): ?><option <?php echo ($gender ?? '') === $option ? 'selected' : ''; ?>><?php echo $option; ?></option><?php endforeach; ?></select></div>
             <div>
-                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Password</label>
-                <input type="password" name="password" minlength="10" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary">
+                <label for="reg-password" class="block text-xs font-semibold text-gray-500 uppercase mb-1">Password</label>
+                <input id="reg-password" type="password" name="password" minlength="10" required autocomplete="new-password" aria-describedby="reg-password-help" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary">
+                <p id="reg-password-help" class="text-xs text-gray-500 mt-1">At least 10 characters.</p>
+            </div>
+            <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-600">
+                We use these details only to manage your tenancy: your lease, rent records, receipts, repair requests and notices. Only management staff and you can see them. Read the <a class="text-primary font-semibold" href="<?php echo BASE_URL; ?>/public/privacy.php">privacy notice</a> for how your data is kept and your rights under the Data Protection Act, 2019.
+                <label for="reg-consent" class="flex items-start gap-2 mt-2 text-sm text-gray-800"><input id="reg-consent" type="checkbox" name="privacy_consent" value="1" required class="mt-1"> <span>I have read the privacy notice and agree that my details may be used for managing my tenancy.</span></label>
             </div>
             <button type="submit" class="w-full bg-primary hover:bg-blue-800 text-white font-semibold py-2.5 rounded-lg text-sm transition">
                 Register Account
