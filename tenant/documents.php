@@ -41,10 +41,16 @@ include __DIR__ . '/../includes/layout_top.php';
                             <li class="py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                                 <div>
                                     <p class="font-bold text-gray-900"><?php echo e($l['property_name'] . ' - Unit ' . $l['unit_number']); ?></p>
+<<<<<<< HEAD
                                     <p class="text-xs text-gray-500">Period: <?php echo e($l['start_date'] . ' to ' . $l['end_date']); ?></p>
                                 </div>
                                 <div class="flex items-center gap-3"><?php echo render_status_badge($l['status']); ?>
                                     <?php if (!empty($l['document_path'])): ?><a class="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary" href="<?php echo BASE_URL; ?>/tenant/download_document.php?type=lease&amp;id=<?php echo (int)$l['id']; ?>">Download lease</a><?php else: ?><span class="text-xs text-gray-500">No file attached</span><?php endif; ?>
+=======
+                                    <p class="text-xs text-gray-500">Period: <?php echo e(format_date($l['start_date']) . ' to ' . format_date($l['end_date'])); ?></p>
+                                    <p class="text-xs text-gray-500">Rent <?php echo format_currency($l['monthly_rent']); ?> due on day <?php echo (int)$l['payment_due_day']; ?> · deposit <?php echo format_currency($l['deposit']); ?> · notice <?php echo (int)$l['notice_period_days']; ?> days<?php echo !empty($l['rent_review_date']) ? ' · rent review ' . e(format_date($l['rent_review_date'])) : ''; ?></p>
+                                    <?php if ($l['special_terms']): ?><p class="text-xs text-gray-500">Terms: <?php echo e($l['special_terms']); ?></p><?php endif; ?>
+>>>>>>> 821dfc5081008f5deeee9e752f0a38a164e17c2d
                                 </div>
                             </li>
                         <?php endforeach; ?>

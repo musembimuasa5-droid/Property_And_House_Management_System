@@ -182,6 +182,7 @@ include __DIR__ . '/../includes/navbar.php';
                 <h2 id="contact-form-heading">Tell us what you need</h2>
                 <p>Fields marked <span aria-hidden="true">*</span> are required. Please don’t include passwords or sensitive account credentials.</p>
             </div>
+<<<<<<< HEAD
 
             <?php if ($success !== ''): ?>
                 <div class="contact-feedback contact-feedback-success" role="status"><?php echo e($success); ?></div>
@@ -233,5 +234,14 @@ include __DIR__ . '/../includes/navbar.php';
         </section>
     </section>
 </main>
+=======
+            <p class="text-xs text-gray-500">We use your details only to reply to this message. See the <a class="text-primary font-semibold" href="<?php echo BASE_URL; ?>/public/privacy.php">privacy notice</a>.</p>
+            <button type="submit" class="bg-primary hover:bg-blue-800 text-white font-semibold px-6 py-2.5 rounded-lg text-sm transition">
+                Send Message
+            </button>
+        </form>
+    </div>
+</div>
+>>>>>>> 821dfc5081008f5deeee9e752f0a38a164e17c2d
 
 <?php include __DIR__ . '/../includes/footer.php'; ?>

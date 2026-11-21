@@ -35,10 +35,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($postText('_action') === 'cancel') {
         $requestId = filter_var($postText('request_id'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: 0;
         $cancel = $db->prepare("UPDATE maintenance_requests SET status = 'Cancelled' WHERE id = ? AND tenant_id = ? AND status IN ('Submitted', 'Reviewed')");
+<<<<<<< HEAD
         $cancel->execute([$requestId, $tenantId]);
         $_SESSION['maintenance_success'] = $cancel->rowCount() === 1
             ? 'Maintenance request cancelled.'
             : 'That request can no longer be cancelled.';
+=======
+        $cancel->execute([$requestId ?: 0, $tenantId]);
+        if ($cancel->rowCount()) record_maintenance_update($db, (int)$requestId, 'Cancelled', 'Cancelled by the tenant');
+        set_flash($cancel->rowCount() ? 'success' : 'error', $cancel->rowCount() ? 'Request cancelled.' : 'That request can no longer be cancelled.');
+>>>>>>> 821dfc5081008f5deeee9e752f0a38a164e17c2d
         redirect('tenant/maintenance.php');
     } elseif (!$tenantId) {
         $error = 'A maintenance request can only be submitted for an active tenancy linked to your account.';
@@ -54,6 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($description === '' || strlen($description) > 2000) {
             $error = 'Describe the issue in 1 to 2,000 characters.';
         } else {
+<<<<<<< HEAD
             $allowedUnitIds = array_map(static function ($lease) {
                 return (int)$lease['unit_id'];
             }, $tenantLeases);
@@ -107,6 +114,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
             }
+=======
+            $photo = null;
+            if (($_FILES['photo']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+                $upload = uploadApplicationFile($_FILES['photo'], 'maintenance', ['jpg', 'jpeg', 'png']);
+                if ($upload['success']) $photo = $upload['path'];
+                else $error = 'Photo: ' . $upload['error'];
+            }
+        }
+        if (!$error) {
+            $stmt = $db->prepare('INSERT INTO maintenance_requests (tenant_id, property_id, unit_id, category, description, priority, image_path) VALUES (?, ?, ?, ?, ?, ?, ?)');
+            $stmt->execute([$tenantId, $lease['property_id'], $lease['unit_id'], $form['category'], $form['description'], $form['priority'], $photo]);
+            $newId = (int)$db->lastInsertId();
+            record_maintenance_update($db, $newId, 'Submitted', 'Reported by the tenant' . ($photo ? ' with a photo' : ''));
+            logAuditAction('CREATE', 'maintenance_requests', $newId, "Tenant reported a {$form['category']} issue", null, ['category' => $form['category'], 'priority' => $form['priority'], 'photo' => (bool)$photo]);
+            notify_roles($db, MANAGEMENT_ROLES, ($form['priority'] === 'Emergency' ? 'EMERGENCY: ' : '') . 'New maintenance request',
+                "{$user['full_name']} reported a {$form['category']} issue ({$form['priority']} priority): " . mb_strimwidth($form['description'], 0, 120, '…'));
+            set_flash('success', 'Maintenance request submitted. You will get a notice when its status changes.');
+            redirect('tenant/maintenance.php');
+>>>>>>> 821dfc5081008f5deeee9e752f0a38a164e17c2d
         }
     }
 }
@@ -129,6 +155,7 @@ include __DIR__ . '/../includes/layout_top.php';
 
 <div class="grid grid-cols-1 xl:grid-cols-5 gap-6 items-start">
     <div class="bg-white p-6 rounded-xl border border-gray-100 shadow-sm xl:col-span-2">
+<<<<<<< HEAD
                 <h3 class="font-bold text-lg text-gray-900 mb-4">Submit New Request</h3>
                 <?php if (!$tenantLeases): ?><p class="mb-4 text-sm text-amber-800">No active tenancy is linked to your account, so requests cannot be submitted.</p><?php endif; ?>
                 <form method="POST" enctype="multipart/form-data" class="space-y-4">
@@ -168,6 +195,36 @@ include __DIR__ . '/../includes/layout_top.php';
                     <div><label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Optional photo (JPG/PNG, up to 5 MB)</label><input type="file" name="maintenance_image" accept=".jpg,.jpeg,.png,image/jpeg,image/png" <?php echo !$tenantLeases ? 'disabled' : ''; ?> class="block w-full text-sm"></div>
                     <button type="submit" <?php echo !$tenantLeases ? 'disabled' : ''; ?> class="bg-primary text-white font-semibold px-4 py-2 rounded-lg text-sm transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50">Submit Request</button>
                 </form>
+=======
+        <h2 class="font-bold text-lg text-gray-900 mb-4">Submit a new request</h2>
+        <?php if (!$lease): ?><p class="text-sm text-gray-500">You need an active lease to submit requests. Contact management if this looks wrong.</p><?php else: ?>
+        <form method="POST" enctype="multipart/form-data" class="space-y-4">
+            <?php echo csrf_field(); ?>
+            <div>
+                <label for="category" class="block text-xs font-semibold text-gray-500 uppercase mb-1">Category</label>
+                <select id="category" name="category" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                    <?php foreach (TENANT_MAINTENANCE_CATEGORIES as $category): ?><option <?php echo $form['category'] === $category ? 'selected' : ''; ?>><?php echo e($category); ?></option><?php endforeach; ?>
+                </select>
+            </div>
+            <div>
+                <label for="priority" class="block text-xs font-semibold text-gray-500 uppercase mb-1">Priority</label>
+                <select id="priority" name="priority" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                    <?php foreach (['Low', 'Medium', 'High', 'Emergency'] as $priority): ?><option <?php echo $form['priority'] === $priority ? 'selected' : ''; ?>><?php echo e($priority); ?></option><?php endforeach; ?>
+                </select>
+            </div>
+            <div>
+                <label for="description" class="block text-xs font-semibold text-gray-500 uppercase mb-1">Description</label>
+                <textarea id="description" name="description" rows="4" required maxlength="2000" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Describe the issue and where it is"><?php echo e($form['description']); ?></textarea>
+            </div>
+            <div>
+                <label for="photo" class="block text-xs font-semibold text-gray-500 uppercase mb-1">Photo <span class="normal-case font-normal">(optional)</span></label>
+                <input id="photo" type="file" name="photo" accept="image/jpeg,image/png" aria-describedby="photo-help" class="block w-full text-sm">
+                <p id="photo-help" class="text-xs text-gray-500 mt-1">A JPG or PNG up to 5 MB helps the caretaker see the problem before visiting.</p>
+            </div>
+            <button type="submit" class="btn btn-primary">Submit request</button>
+        </form>
+        <?php endif; ?>
+>>>>>>> 821dfc5081008f5deeee9e752f0a38a164e17c2d
     </div>
 
     <section class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden xl:col-span-3" aria-labelledby="my-requests">
@@ -180,7 +237,13 @@ include __DIR__ . '/../includes/layout_top.php';
                 <tr>
                     <td class="p-4 whitespace-nowrap align-top"><?php echo e(format_date($request['created_at'])); ?></td>
                     <td class="p-4 align-top"><strong><?php echo e($request['category']); ?></strong><div class="text-xs text-gray-600 max-w-xs"><?php echo e($request['description']); ?></div>
-                        <?php if ($request['staff_name']): ?><div class="text-xs text-gray-500 mt-1">Assigned to <?php echo e($request['staff_name']); ?></div><?php endif; ?></td>
+                        <?php if ($request['staff_name']): ?><div class="text-xs text-gray-500 mt-1">Assigned to <?php echo e($request['staff_name']); ?></div><?php endif; ?>
+                        <?php if ($request['image_path']): ?><a class="text-xs text-primary font-semibold" href="<?php echo e(attachment_url('maintenance', (int)$request['id'])); ?>" target="_blank" rel="noopener">View photo<span class="sr-only"> (opens in a new tab)</span></a><?php endif; ?>
+                        <?php $history = maintenance_history($db, (int)$request['id']); if ($history): ?>
+                        <details class="text-xs text-gray-600 mt-1"><summary class="cursor-pointer text-primary font-semibold">History (<?php echo count($history); ?>)</summary>
+                            <ol class="mt-1 space-y-0.5"><?php foreach ($history as $step): ?><li><?php echo e(date('d M Y, H:i', strtotime($step['created_at']))); ?> · <strong><?php echo e($step['status']); ?></strong><?php echo $step['note'] ? ' · ' . e($step['note']) : ''; ?></li><?php endforeach; ?></ol>
+                        </details>
+                        <?php endif; ?></td>
                     <td class="p-4 align-top"><?php echo render_status_badge($request['priority']); ?></td>
                     <td class="p-4 align-top"><?php echo render_status_badge($request['status']); ?><?php if ($request['completed_date']): ?><div class="text-xs text-gray-500 mt-1"><?php echo e(format_date($request['completed_date'])); ?></div><?php endif; ?></td>
                     <td class="p-4 align-top text-right">

@@ -1,11 +1,14 @@
 <?php
 require_once __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/../config/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !csrf_validate()) {
     http_response_code(405);
     exit('Invalid request.');
 }
+
+if (isLoggedIn()) logAuditAction('LOGOUT', 'auth', (int)$_SESSION['user_id'], 'Signed out');
 
 // Clear session data
 $_SESSION = [];
