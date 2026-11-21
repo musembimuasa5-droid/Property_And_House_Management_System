@@ -7,13 +7,13 @@ Plain PHP, no extra packages. Everything runs against a separate database whose 
 | `setup_test_database.ps1` | Drops and rebuilds the test database: schema, seed, every migration, then `fixtures/synthetic_data.php` |
 | `fixtures/synthetic_data.php` | Fictitious tenants, leases, charges, payments, deposits, condition reports, repairs, complaints and enquiries |
 | `fixtures/photos/` | Synthetic images labelled "SYNTHETIC TEST PHOTO" used as inspection and repair photos |
-| `run_tests.php` | 71 test cases: unit (UT), integration (IT, rolled back), system (ST, over HTTP), security (SEC) and non-functional (NFR) |
+| `run_tests.php` | 85 test cases: unit (UT), integration (IT, rolled back), system (ST, over HTTP), security (SEC) and non-functional (NFR) |
 | `lib/TestKit.php` | Assertions and a small HTTP client that keeps a session and reads CSRF tokens |
 
 ## Running
 
 ```powershell
-pwsh -File tests\setup_test_database.ps1
+pwsh -File tests\setup_test_database.ps1          # add -Port 3307 to use a MariaDB on another port (then set $env:DB_PORT too)
 $env:DB_NAME = 'urban_escape_test'; $env:APP_URL = 'http://127.0.0.1:8090'
 C:\xampp\php\php.exe -S 127.0.0.1:8090 -t .        # second window, leave running
 C:\xampp\php\php.exe tests\run_tests.php --base-url=http://127.0.0.1:8090 --json=results.json

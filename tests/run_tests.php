@@ -144,6 +144,14 @@ TestKit::add('UT-10', 'Secrets never reach the audit log', 'Audit helper loaded'
         check(!str_contains((string)$json, 'password_hash') && audit_values([]) === null, "Encoded: $json");
         return "Stored: $json";
     });
+TestKit::add('UT-11', 'Arrears ageing band boundaries', 'Report rules loaded', ['Classify charges -3, 0, 1, 30, 31, 60, 61, 90, 91 and 400 days after their due date'],
+    'Not yet due for -3 and 0; 1–30 for 1 and 30; 31–60 for 31 and 60; 61–90 for 61 and 90; over 90 for 91 and 400', function () {
+        $days = [-3, 0, 1, 30, 31, 60, 61, 90, 91, 400];
+        $bands = array_map('arrears_age_band', $days);
+        $expected = ['not_due', 'not_due', 'days_1_30', 'days_1_30', 'days_31_60', 'days_31_60', 'days_61_90', 'days_61_90', 'days_over_90', 'days_over_90'];
+        check($bands === $expected, 'Got ' . implode(', ', $bands));
+        return implode(', ', array_map(fn($d, $b) => "{$d} days → " . ARREARS_AGE_BANDS[$b], $days, $bands));
+    });
 
 // ===========================================================================
 // IT: integration tests against the test database (rolled back afterwards)
@@ -268,6 +276,45 @@ TestKit::add('IT-08', 'Arrears reminders are sent once a day', 'Brian, Kevin and
             check($sent >= 3 && $again === 0 && $skipped === $sent, "Sent $sent, then $again (skipped $skipped)");
             return "First run sent $sent; second sent 0 and skipped $skipped";
         });
+    });
+TestKit::add('IT-09', 'A landlord\'s billing run and reminders cover only their own leases', 'Lucy Chebet rents B202 at Green View (Mary Wambui); Kevin Omondi at Green View is overdue', ['Generate February 2027 charges for Joseph Kamau only', 'Generate them for Mary Wambui', 'Send Joseph\'s arrears reminders'],
+    'Joseph\'s run charges none of Green View; Mary\'s run charges Lucy; Joseph\'s reminders never reach Kevin', function () use ($db) {
+        return in_rollback($db, function (PDO $db) {
+            $lucy = lease_of('Lucy Chebet');
+            [$joseph] = generate_rent_charges($db, '2027-02', 1);
+            $greenViewAfterJoseph = (int)one("SELECT COUNT(*) FROM rent_charges WHERE billing_period = '2027-02' AND lease_id IN (SELECT id FROM leases WHERE property_id = 2)");
+            [$mary] = generate_rent_charges($db, '2027-02', 2);
+            $lucyCharged = (int)one("SELECT COUNT(*) FROM rent_charges WHERE billing_period = '2027-02' AND lease_id = ?", [$lucy]);
+            $kevinUser = user_id('kevin.omondi@urbanescape.test');
+            $db->prepare('DELETE FROM notifications WHERE user_id = ? AND title = ?')->execute([$kevinUser, ARREARS_REMINDER_TITLE]);
+            send_arrears_reminders($db, 1);
+            $kevinReminded = (int)one('SELECT COUNT(*) FROM notifications WHERE user_id = ? AND title = ?', [$kevinUser, ARREARS_REMINDER_TITLE]);
+            check($joseph > 0 && $greenViewAfterJoseph === 0 && $mary >= 1 && $lucyCharged === 1 && $kevinReminded === 0,
+                "Joseph $joseph, Green View after Joseph $greenViewAfterJoseph, Mary $mary, Lucy $lucyCharged, Kevin reminded $kevinReminded");
+            return "Joseph's run created $joseph charge(s), none at Green View; Mary's created $mary including Lucy's; Kevin got no reminder from Joseph's run";
+        });
+    });
+TestKit::add('IT-10', 'Arrears ageing bands add up', 'Brian, Kevin and Esther have unpaid charges of different ages', ['Run the arrears report', 'Recompute Kevin\'s bands from his unpaid charges'],
+    'Every row\'s bands sum to its balance; the ageing summary sums to the total; Kevin\'s bands match his charges', function () use ($db) {
+        $report = report_arrears($db, report_params('arrears', null));
+        $bands = array_keys(ARREARS_AGE_BANDS);
+        foreach ($report['rows'] as $row) {
+            $sum = array_sum(array_map(fn($band) => $row[$band], $bands));
+            check(abs($sum - $row['balance']) < 0.01, "Bands of {$row['tenant']} sum to $sum, balance {$row['balance']}");
+        }
+        $summary = array_sum(array_column($report['breakdown']['rows'], 'amount'));
+        check(abs($summary - $report['totals']['balance']) < 0.01, "Ageing summary $summary, total {$report['totals']['balance']}");
+
+        $kevin = current(array_filter($report['rows'], fn($row) => $row['tenant'] === 'Kevin Omondi'));
+        check((bool)$kevin, 'Kevin Omondi is not in the arrears report');
+        $expected = array_fill_keys($bands, 0.0);
+        $charges = db()->prepare('SELECT rc.total_due - COALESCE(SUM(pa.allocated_amount), 0) AS owed, DATEDIFF(CURDATE(), rc.due_date) AS late FROM rent_charges rc
+            LEFT JOIN payment_allocations pa ON pa.rent_charge_id = rc.id WHERE rc.lease_id = ? GROUP BY rc.id, rc.total_due, rc.due_date HAVING owed > 0.004');
+        $charges->execute([lease_of('Kevin Omondi')]);
+        foreach ($charges->fetchAll() as $charge) $expected[arrears_age_band((int)$charge['late'])] += (float)$charge['owed'];
+        foreach ($bands as $band) check(abs($expected[$band] - $kevin[$band]) < 0.01, "Kevin's $band: expected {$expected[$band]}, got {$kevin[$band]}");
+        return count($report['rows']) . ' rows balance; summary equals ' . format_currency($summary) . '; Kevin: '
+            . implode(', ', array_map(fn($band) => ARREARS_AGE_BANDS[$band] . ' ' . format_currency($kevin[$band]), array_filter($bands, fn($band) => $kevin[$band] > 0)));
     });
 
 // ===========================================================================
@@ -644,6 +691,127 @@ TestKit::add('ST-38', 'Refused or expired access is explained to the user', 'Ten
         check(str_contains($tenant, 'You do not have permission to open that page') && str_contains($tenant, 'Return to your dashboard') && str_contains($visitor, 'Please sign in to continue.'), 'Explanations missing');
         return 'Tenant: "You do not have permission to open that page. Return to your dashboard."; visitor: "Please sign in to continue."';
     });
+TestKit::add('ST-39', 'A landlord registers their own tenant', 'Joseph Kamau (landlord) signed in', ['Add tenant "Wanjiru Landlord" (ID 40000039), also posting a portal login id', 'Search My Tenants as Joseph and as Mary Wambui'],
+    'Tenant saved and tagged to Joseph; the posted login id is ignored; Joseph finds her, Mary does not', function () use (&$state) {
+        $joseph = signed_in('landlord@urbanescape.test');
+        $saved = $joseph->submit('/landlord/tenants.php', ['_action' => 'save', 'full_name' => 'Wanjiru Landlord', 'national_id' => '40000039', 'phone' => '+254700400039',
+            'email' => 'wanjiru.landlord@urbanescape.test', 'gender' => 'Female', 'status' => 'Active', 'user_id' => user_id('tenant@urbanescape.test')], [], '/landlord/tenants.php?action=create');
+        $tenant = row("SELECT id, landlord_id, user_id FROM tenants WHERE national_id = '40000039'");
+        $state['ll_tenant'] = (int)($tenant['id'] ?? 0);
+        $josephList = $joseph->open('/landlord/tenants.php?q=Wanjiru')['body'];
+        $maryList = signed_in('landlord2@urbanescape.test')->open('/landlord/tenants.php?q=Wanjiru')['body'];
+        check(str_contains($saved['after'], 'Tenant created.') && (int)($tenant['landlord_id'] ?? 0) === 1 && array_key_exists('user_id', $tenant) && $tenant['user_id'] === null
+            && str_contains($josephList, 'Wanjiru Landlord') && !str_contains($maryList, 'Wanjiru Landlord'), 'Tenant row: ' . json_encode($tenant));
+        return "Tenant #{$state['ll_tenant']} saved with landlord_id 1 and no portal login; listed for Joseph only";
+    });
+TestKit::add('ST-40', 'A landlord writes a lease for their own unit only', 'ST-39 tenant exists; G2 (Acacia Gardens, Joseph) is vacant; B203 belongs to Mary Wambui', ['Create an Active lease for Wanjiru on G2 with rent and deposit left blank', 'Try a lease on B203', 'Try a lease for Kevin Omondi (Mary\'s tenant)'],
+    'G2 lease saved with the unit\'s rent and G2 becomes Occupied; both other attempts are refused', function () use (&$state, $today) {
+        $joseph = signed_in('landlord@urbanescape.test');
+        $lease = ['_action' => 'save', 'tenant_id' => $state['ll_tenant'], 'unit_id' => unit_id('G2'), 'start_date' => $today, 'end_date' => date('Y-m-d', strtotime('+1 year -1 day')),
+            'monthly_rent' => '', 'deposit' => '', 'payment_due_day' => 5, 'notice_period_days' => 30, 'rent_review_date' => '', 'status' => 'Active', 'special_terms' => ''];
+        $saved = $joseph->submit('/landlord/leases.php', $lease, [], '/landlord/leases.php?action=create');
+        $row = row('SELECT l.id, l.monthly_rent, u.monthly_rent AS unit_rent, u.status FROM leases l JOIN units u ON u.id = l.unit_id WHERE l.tenant_id = ?', [$state['ll_tenant']]);
+        $state['ll_lease'] = (int)($row['id'] ?? 0);
+        $otherUnit = $joseph->submit('/landlord/leases.php', ['unit_id' => unit_id('B203'), 'status' => 'Pending'] + $lease, [], '/landlord/leases.php?action=create');
+        $otherTenant = $joseph->submit('/landlord/leases.php', ['tenant_id' => (int)one("SELECT id FROM tenants WHERE full_name = 'Kevin Omondi'"), 'unit_id' => unit_id('G4'), 'status' => 'Pending'] + $lease, [], '/landlord/leases.php?action=create');
+        check(str_contains($saved['after'], 'Lease created.') && $row && (float)$row['monthly_rent'] === (float)$row['unit_rent'] && $row['status'] === 'Occupied'
+            && str_contains($otherUnit['body'], 'Select a valid option for Unit.') && str_contains($otherTenant['body'], 'Select a valid option for Tenant.'), 'Lease row: ' . json_encode($row));
+        return "Lease #{$state['ll_lease']} saved at KSh {$row['monthly_rent']}; G2 Occupied; B203 and Kevin Omondi refused";
+    });
+TestKit::add('ST-41', 'A landlord bills the month, records a payment and prints the receipt', 'ST-40 lease is Active and not yet charged', ['Generate charges for the current month on My Rent Charges', 'Record KSh 5,000 by M-Pesa, reference ST41REF001', 'Open the receipt'],
+    'The lease is charged once; the payment is recorded by Joseph, KSh 5,000 is allocated, and the receipt shows the tenant', function () use (&$state, $today) {
+        $joseph = signed_in('landlord@urbanescape.test');
+        $generated = $joseph->submit('/landlord/rent-charges.php', ['_action' => 'generate', 'period' => date('Y-m')]);
+        $charges = (int)one('SELECT COUNT(*) FROM rent_charges WHERE lease_id = ? AND billing_period = ?', [$state['ll_lease'], date('Y-m')]);
+        $paid = $joseph->submit('/landlord/payments.php', ['_action' => 'save', 'lease_id' => $state['ll_lease'], 'amount' => 5000, 'payment_method' => 'M-Pesa',
+            'transaction_reference' => 'ST41REF001', 'payment_date' => $today, 'payment_period' => date('Y-m'), 'notes' => ''], [], '/landlord/payments.php?action=create');
+        $payment = row("SELECT id, receipt_number, recorded_by FROM payments WHERE transaction_reference = 'ST41REF001'");
+        $allocated = (float)one('SELECT COALESCE(SUM(allocated_amount), 0) FROM payment_allocations WHERE payment_id = ?', [$payment['id'] ?? 0]);
+        $receipt = $joseph->open('/landlord/receipt.php?id=' . (int)($payment['id'] ?? 0))['body'];
+        check(str_contains($generated['after'], 'Created ') && $charges === 1 && str_contains($paid['after'], 'Payment created.') && (int)$payment['recorded_by'] === user_id('landlord@urbanescape.test')
+            && abs($allocated - 5000) < 0.01 && str_contains($receipt, $payment['receipt_number']) && str_contains($receipt, 'Wanjiru Landlord'), "Charges $charges, allocated $allocated");
+        return "Charged once; payment {$payment['receipt_number']} recorded by Joseph with KSh 5,000 allocated; receipt opens";
+    });
+TestKit::add('ST-42', 'A landlord records the deposit and the move-in report', 'ST-40 lease exists with no deposit or condition report', ['Record the full deposit as Received', 'Create a Move-in report', 'Try a Move-in report on Kevin Omondi\'s lease'],
+    'Deposit held equals the agreed deposit; the report is saved with 8 lines and Joseph as inspector; Kevin\'s lease is refused', function () use (&$state, $today) {
+        $joseph = signed_in('landlord@urbanescape.test');
+        $agreed = (float)one('SELECT deposit FROM leases WHERE id = ?', [$state['ll_lease']]);
+        $deposit = $joseph->submit('/landlord/deposits.php', ['_action' => 'save', 'lease_id' => $state['ll_lease'], 'transaction_type' => 'Received', 'amount' => $agreed,
+            'transaction_date' => $today, 'reason' => 'Deposit paid at signing', 'condition_report_id' => '', 'reference' => 'ST42DEP'], [], '/landlord/deposits.php?action=create');
+        $held = deposit_summary(db(), $state['ll_lease'])['held'];
+        $fields = ['_action' => 'save', 'lease_id' => $state['ll_lease'], 'report_type' => 'Move-in', 'inspection_date' => $today, 'overall_condition' => 'Good',
+            'general_notes' => 'ST-42 landlord inspection', 'item_condition' => array_fill(0, 8, 'Good'), 'remarks' => array_fill(0, 8, '')];
+        $report = $joseph->submit('/landlord/condition-reports.php', $fields, [], '/landlord/condition-reports.php?action=create');
+        $saved = row("SELECT id, inspected_by, (SELECT COUNT(*) FROM condition_report_items i WHERE i.report_id = cr.id) AS items FROM condition_reports cr WHERE general_notes = 'ST-42 landlord inspection'");
+        $other = $joseph->submit('/landlord/condition-reports.php', ['lease_id' => lease_of('Kevin Omondi'), 'general_notes' => 'ST-42 not mine'] + $fields, [], '/landlord/condition-reports.php?action=create');
+        check(str_contains($deposit['after'], 'Deposit entry created.') && abs($held - $agreed) < 0.01 && str_contains($report['after'], 'report saved')
+            && (int)$saved['inspected_by'] === user_id('landlord@urbanescape.test') && (int)$saved['items'] === 8
+            && str_contains($other['body'], 'Choose the lease this inspection belongs to.') && !one("SELECT COUNT(*) FROM condition_reports WHERE general_notes = 'ST-42 not mine'"), "Held $held of $agreed");
+        return 'Deposit of ' . format_currency($agreed) . " held; move-in report #{$saved['id']} saved with 8 lines by Joseph; Kevin's lease refused";
+    });
+TestKit::add('ST-43', 'Management assigns a caretaker to a property', 'Lavington Court Homes has no caretaker', ['As Property Manager, edit Lavington Court Homes and choose Samuel Kiprono as caretaker', 'Open Samuel\'s dashboard and units page'],
+    'The caretaker is saved; Samuel sees the property and its units', function () {
+        $property = row('SELECT * FROM properties WHERE id = 4');
+        $fields = ['_action' => 'save', 'id' => 4, 'caretaker_id' => user_id('caretaker2@urbanescape.test')];
+        foreach (['name', 'property_type', 'landlord_id', 'location_id', 'physical_address', 'number_of_units', 'year_built', 'status', 'latitude', 'longitude', 'amenities', 'description'] as $column) {
+            $fields[$column] = (string)($property[$column] ?? '');
+        }
+        $saved = signed_in('manager@urbanescape.test')->submit('/admin/properties.php', $fields);
+        $samuel = signed_in('caretaker2@urbanescape.test');
+        $dashboard = $samuel->open('/caretaker/dashboard.php')['body'];
+        $units = $samuel->open('/caretaker/units.php?property_id=4')['body'];
+        check(str_contains($saved['after'], 'Property updated.') && (int)one('SELECT caretaker_id FROM properties WHERE id = 4') === user_id('caretaker2@urbanescape.test')
+            && str_contains($dashboard, 'Lavington Court Homes') && str_contains($units, 'Lavington Court Homes'), 'Caretaker assignment not visible');
+        return 'Samuel Kiprono assigned; Lavington Court Homes appears on his dashboard and units page';
+    });
+TestKit::add('ST-44', 'A caretaker records a move-in inspection', 'John Mwangi looks after Sunrise Apartments; Brian Mutua (A102) has no move-in report', ['As John, create a Move-in report for Brian\'s lease with a photo', 'Try one for Kevin Omondi (Green View)', 'Try to delete the saved report'],
+    'Report saved with John as inspector; Brian and management notified; no deposit figures shown; Kevin\'s lease refused; delete refused', function () use (&$state, $photo, $today) {
+        $john = signed_in('caretaker@urbanescape.test');
+        $fields = ['_action' => 'save', 'lease_id' => lease_of('Brian Mutua'), 'report_type' => 'Move-in', 'inspection_date' => $today, 'overall_condition' => 'Good',
+            'general_notes' => 'ST-44 caretaker inspection', 'item_condition' => array_fill(0, 8, 'Good'), 'remarks' => array_fill(0, 8, '')];
+        $saved = $john->submit('/caretaker/condition-reports.php', $fields, ['photo[1]' => $photo], '/caretaker/condition-reports.php?action=create');
+        $report = row("SELECT id, inspected_by FROM condition_reports WHERE general_notes = 'ST-44 caretaker inspection'");
+        $state['caretaker_report'] = (int)($report['id'] ?? 0);
+        $brian = (int)one("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND title = 'Move-in condition report ready'", [user_id('brian.mutua@urbanescape.test')]);
+        $managers = (int)one("SELECT COUNT(*) FROM notifications WHERE user_id = 2 AND title = 'Move-in report by caretaker'");
+        $other = $john->submit('/caretaker/condition-reports.php', ['lease_id' => lease_of('Kevin Omondi'), 'general_notes' => 'ST-44 not assigned'] + $fields, [], '/caretaker/condition-reports.php?action=create');
+        $delete = $john->submit('/caretaker/condition-reports.php', ['_action' => 'delete', 'id' => $state['caretaker_report']]);
+        check(str_contains($saved['after'], 'report saved') && (int)$report['inspected_by'] === user_id('caretaker@urbanescape.test') && $brian === 1 && $managers === 1
+            && !str_contains($saved['after'], 'Deposit for this lease') && !str_contains($saved['after'], 'Delete report')
+            && str_contains($other['body'], 'Choose the lease this inspection belongs to.') && str_contains($delete['after'], 'Ask management to delete')
+            && (int)one('SELECT COUNT(*) FROM condition_reports WHERE id = ?', [$state['caretaker_report']]) === 1, "Brian notified $brian, managers $managers");
+        return "Report #{$state['caretaker_report']} saved by John; Brian and the Property Manager notified; Kevin's lease and the delete refused";
+    });
+TestKit::add('ST-45', 'A caretaker records meter readings for assigned units only', 'John Mwangi looks after Sunrise Apartments; B202 is at Green View', ['Record a December water reading 7 m³ above the last one for A103', 'Try a reading for B202', 'Open Meter Readings and post a delete'],
+    'A103 reading saved with 7 m³ and John as recorder; B202 refused; no Delete button and the delete is refused', function () {
+        $john = signed_in('caretaker@urbanescape.test');
+        $last = (float)one('SELECT current_reading FROM utility_readings WHERE unit_id = ? AND utility_type_id = 1 ORDER BY billing_period DESC, id DESC LIMIT 1', [unit_id('A103')]);
+        $fields = ['_action' => 'save', 'unit_id' => unit_id('A103'), 'utility_type_id' => 1, 'billing_period' => '2026-12', 'reading_date' => date('Y-m-d'),
+            'previous_reading' => '', 'current_reading' => $last + 7, 'rate' => ''];
+        $saved = $john->submit('/caretaker/utility-readings.php', $fields, [], '/caretaker/utility-readings.php?action=create');
+        $reading = row("SELECT id, consumption, recorded_by FROM utility_readings WHERE unit_id = ? AND billing_period = '2026-12'", [unit_id('A103')]);
+        $other = $john->submit('/caretaker/utility-readings.php', ['unit_id' => unit_id('B202')] + $fields, [], '/caretaker/utility-readings.php?action=create');
+        $list = $john->open('/caretaker/utility-readings.php')['body'];
+        $delete = $john->submit('/caretaker/utility-readings.php', ['_action' => 'delete', 'id' => (int)($reading['id'] ?? 0)]);
+        check(str_contains($saved['after'], 'Utility reading created.') && abs((float)$reading['consumption'] - 7) < 0.001 && (int)$reading['recorded_by'] === user_id('caretaker@urbanescape.test')
+            && str_contains($other['body'], 'Select a valid option for Unit.') && !str_contains($list, '>Delete<') && !str_contains($list, 'Green View')
+            && str_contains($delete['after'], 'permission') && (int)one('SELECT COUNT(*) FROM utility_readings WHERE id = ?', [$reading['id'] ?? 0]) === 1, 'Reading: ' . json_encode($reading));
+        return 'A103 reading of 7 m³ saved by John; B202 refused; no Delete button and the posted delete refused';
+    });
+TestKit::add('ST-46', 'Arrears report shows ageing bands; landlords get tenant statements', 'Brian, Kevin and Esther are in arrears', ['As Accountant, open the arrears report and its CSV', 'As Joseph, open Brian\'s statement, then ask for Kevin Omondi\'s'],
+    'Band columns and an ageing summary appear on screen and in the CSV; Joseph sees Brian\'s statement but not Kevin\'s', function () {
+        $accountant = signed_in('accountant@urbanescape.test');
+        $page = $accountant->open('/admin/reports.php?report=arrears')['body'];
+        $csv = $accountant->get('/admin/reports.php?report=arrears&format=csv')['body'];
+        $joseph = signed_in('landlord@urbanescape.test');
+        $brian = $joseph->open('/landlord/reports.php?report=statement&tenant_id=' . (int)one("SELECT id FROM tenants WHERE full_name = 'Brian Mutua'"))['body'];
+        $kevin = $joseph->open('/landlord/reports.php?report=statement&tenant_id=' . (int)one("SELECT id FROM tenants WHERE full_name = 'Kevin Omondi'"))['body'];
+        $bands = array_filter(ARREARS_AGE_BANDS, fn($label) => str_contains($page, $label) && str_contains($csv, $label));
+        check(count($bands) === 5 && str_contains($page, 'Ageing summary') && str_contains($csv, 'Ageing summary') && str_contains($page, 'Over 60 days')
+            && str_contains($brian, 'Rent charge for') && !str_contains($kevin, 'Rent charge for') && str_contains($kevin, 'Choose a tenant to see their statement.')
+            && !str_contains($kevin, 'Kevin Omondi'), count($bands) . ' band labels found');
+        return 'All 5 bands and the ageing summary on screen and in CSV; Joseph sees Brian\'s statement, and Kevin is neither shown nor offered';
+    });
 
 // ===========================================================================
 // SEC: security tests aligned with the OWASP Top 10 (2021)
@@ -763,6 +931,37 @@ TestKit::add('SEC-14', 'Exported CSV cannot run formulas (A03)', 'Property Manag
         $csv = $browser->get('/admin/tenants.php?action=export')['body'];
         check(str_contains($csv, "'=HYPERLINK") , 'Formula not neutralised');
         return 'Exported as \'=HYPERLINK("http://x"), so spreadsheets show it as text';
+    });
+TestKit::add('SEC-15', 'A landlord cannot reach another landlord\'s tenancy records (A01)', 'Kevin Omondi rents at Green View (Mary Wambui)', ['As Joseph Kamau, open Kevin\'s tenant and lease by id', 'Post a change to Kevin\'s payment', 'Open Kevin\'s receipt', 'Export tenants, payments and deposits to CSV'],
+    '"not found" every time; the payment is unchanged; Kevin appears in no list or export', function () {
+        $joseph = signed_in('landlord@urbanescape.test');
+        $tenantId = (int)one("SELECT id FROM tenants WHERE full_name = 'Kevin Omondi'");
+        $payment = row('SELECT id, amount FROM payments WHERE tenant_id = ? ORDER BY id LIMIT 1', [$tenantId]);
+        $tenant = $joseph->open("/landlord/tenants.php?action=edit&id=$tenantId")['body'];
+        $lease = $joseph->open('/landlord/leases.php?action=edit&id=' . lease_of('Kevin Omondi'))['body'];
+        $post = $joseph->submit('/landlord/payments.php', ['_action' => 'save', 'id' => $payment['id'], 'lease_id' => lease_of('Kevin Omondi'), 'amount' => 1, 'payment_method' => 'Cash',
+            'transaction_reference' => 'SEC15HIJACK', 'payment_date' => date('Y-m-d'), 'payment_period' => date('Y-m'), 'notes' => '']);
+        $receipt = $joseph->open('/landlord/receipt.php?id=' . (int)$payment['id'])['body'];
+        $exports = implode("\n", array_map(fn($page) => $joseph->get("/landlord/$page.php?action=export")['body'], ['tenants', 'payments', 'deposits', 'leases', 'rent-charges']));
+        check(str_contains($tenant, 'Tenant not found.') && str_contains($lease, 'Lease not found.') && str_contains($post['after'], 'Payment not found.')
+            && (float)one('SELECT amount FROM payments WHERE id = ?', [$payment['id']]) === (float)$payment['amount'] && str_contains($receipt, 'Payment not found.')
+            && !str_contains($exports, 'Kevin Omondi') && str_contains($exports, 'Brian Mutua'), 'Joseph reached Kevin Omondi\'s records');
+        return 'Tenant, lease, payment and receipt all "not found"; payment unchanged; Kevin absent from five CSV exports that list Joseph\'s tenants';
+    });
+TestKit::add('SEC-16', 'A caretaker reaches only the properties assigned to them (A01)', 'Samuel Kiprono looks after Green View and Lavington Court; John Mwangi after Sunrise and Acacia Gardens', ['Samuel opens Esther\'s move-in report (Acacia Gardens) by id', 'Samuel and John request a photo from Daniel\'s move-out report (Sunrise)', 'Samuel lists units', 'John opens the staff condition reports page'],
+    'Report not found for Samuel; photo 404 for Samuel and 200 for John; only Samuel\'s properties listed; staff page refused', function () {
+        $samuel = signed_in('caretaker2@urbanescape.test');
+        $john = signed_in('caretaker@urbanescape.test');
+        $esther = (int)one("SELECT cr.id FROM condition_reports cr JOIN leases l ON l.id = cr.lease_id JOIN tenants t ON t.id = l.tenant_id WHERE t.full_name = 'Esther Akinyi' AND cr.report_type = 'Move-in'");
+        $report = $samuel->open("/caretaker/condition-reports.php?action=view&id=$esther")['body'];
+        $item = (int)one("SELECT i.id FROM condition_report_items i JOIN condition_reports cr ON cr.id = i.report_id WHERE cr.report_type = 'Move-out' AND i.photo_path IS NOT NULL LIMIT 1");
+        $photoSamuel = $samuel->get("/account/attachment.php?type=condition&id=$item")['status'];
+        $photoJohn = $john->get("/account/attachment.php?type=condition&id=$item")['status'];
+        $units = $samuel->open('/caretaker/units.php')['body'];
+        $staff = $john->get('/admin/condition-reports.php');
+        check(str_contains($report, 'Condition report not found.') && $photoSamuel === 404 && $photoJohn === 200 && str_contains($units, 'Green View Residences')
+            && !str_contains($units, 'Sunrise Apartments') && $staff['status'] === 302 && str_contains((string)$staff['location'], 'forbidden'), "Photo: Samuel $photoSamuel, John $photoJohn");
+        return 'Samuel: report not found, photo 404, units only at his properties; John: photo 200, staff page refused';
     });
 
 // ===========================================================================

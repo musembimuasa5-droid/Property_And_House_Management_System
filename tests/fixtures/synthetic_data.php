@@ -75,6 +75,9 @@ $maryUser = $user(3, 'Mary Wambui', 'landlord2@urbanescape.test', '+254700100008
 $mary = insert($db, 'landlords', ['user_id' => $maryUser, 'full_name' => 'Mary Wambui', 'company_name' => 'Wambui Homes', 'phone' => '+254700100008',
     'email' => 'landlord2@urbanescape.test', 'id_number' => '25510376', 'address' => 'P.O. Box 200, Nairobi', 'mpesa_number' => '+254700100008']);
 $db->prepare('UPDATE properties SET landlord_id = ? WHERE id = 2')->execute([$mary]);
+// Caretakers: John looks after Sunrise Apartments and Acacia Gardens, Samuel after Green View.
+$db->prepare('UPDATE properties SET caretaker_id = ? WHERE id IN (1, 3)')->execute([CARETAKER]);
+$db->prepare('UPDATE properties SET caretaker_id = ? WHERE id = 2')->execute([$samuel]);
 
 // 2. More units in the two seeded apartment blocks.
 $unit = fn(int $property, string $number, string $floor, string $type, int $beds, float $rent, float $service) => insert($db, 'units', [
