@@ -6,10 +6,18 @@ require_once __DIR__ . '/config/auth.php';
 require_once __DIR__ . '/includes/functions.php';
 
 $properties = [];
+$moreProperties = [];
+$typeCategories = [];
 $areas = [];
 $locationSuggestions = [];
 $stats = ['properties' => 0, 'available' => 0, 'neighbourhoods' => 0];
 $databaseAvailable = true;
+$homePageErrorMessages = [
+    'unauthorized' => 'Please sign in to continue.',
+    'forbidden' => 'You do not have permission to access that page. Please sign in with an account that can view it, or contact your administrator.',
+    'role_portal_unavailable' => 'Your account does not have a dashboard available in this version of the system. Please contact your system administrator.',
+];
+$homePageErrorMessage = $homePageErrorMessages[$_GET['error'] ?? ''] ?? '';
 try {
     $db = db(true);
     if (!$db) {
@@ -24,6 +32,15 @@ try {
     $areas = $db->query("SELECT l.estate, l.sub_county, COUNT(u.id) AS vacant, MIN(u.monthly_rent) AS from_rent
         FROM locations l JOIN properties p ON p.location_id = l.id AND p.status = 'Active' JOIN units u ON u.property_id = p.id AND u.status = 'Vacant'
         GROUP BY l.id, l.estate, l.sub_county ORDER BY vacant DESC, l.estate LIMIT 8")->fetchAll();
+    $moreProperties = $db->query("SELECT p.id, p.name, p.property_type, p.property_image, l.estate, l.sub_county, MIN(u.monthly_rent) AS min_rent,
+            MIN(u.bedrooms) AS bedrooms, MAX(u.bedrooms) AS max_bedrooms, MIN(u.bathrooms) AS bathrooms, COUNT(u.id) AS available_units
+        FROM properties p JOIN locations l ON l.id = p.location_id JOIN units u ON u.property_id = p.id AND u.status = 'Vacant'
+        WHERE p.status = 'Active' GROUP BY p.id, p.name, p.property_type, p.property_image, l.estate, l.sub_county
+        ORDER BY p.created_at DESC, p.id DESC LIMIT 3 OFFSET 6")->fetchAll();
+    $typeCategories = $db->query("SELECT p.property_type, COUNT(DISTINCT p.id) AS property_count, COUNT(u.id) AS unit_count, MIN(u.monthly_rent) AS from_rent
+        FROM properties p JOIN units u ON u.property_id = p.id AND u.status = 'Vacant'
+        WHERE p.status = 'Active' AND TRIM(COALESCE(p.property_type, '')) <> ''
+        GROUP BY p.property_type ORDER BY unit_count DESC, p.property_type ASC LIMIT 6")->fetchAll();
     $stats = $db->query("SELECT COUNT(DISTINCT p.id) AS properties,
             (SELECT COUNT(*) FROM units u JOIN properties ap ON ap.id = u.property_id AND ap.status = 'Active' WHERE u.status = 'Vacant') AS available,
             COUNT(DISTINCT p.location_id) AS neighbourhoods
@@ -50,7 +67,7 @@ include __DIR__ . '/includes/header.php';
 include __DIR__ . '/includes/navbar.php';
 ?>
 <main id="main-content" class="landing-page">
-  <?php if (($_GET['error'] ?? '') === 'role_portal_unavailable'): ?><div class="site-container"><p class="notice notice-warning" role="status">Your account does not have a dashboard available in this version of the system. Please contact your system administrator.</p></div><?php endif; ?>
+  <?php if ($homePageErrorMessage !== ''): ?><div class="site-container"><p class="notice notice-warning" role="status"><?php echo e($homePageErrorMessage); ?></p></div><?php endif; ?>
 
   <section class="hero-section" aria-labelledby="hero-title">
     <div class="site-container hero-layout">
@@ -118,6 +135,45 @@ include __DIR__ . '/includes/navbar.php';
         </article>
       <?php endforeach; ?></div><?php endif; ?>
   </div></section>
+
+  <?php if ($moreProperties): ?>
+  <section class="content-section" aria-labelledby="more-properties-title"><div class="site-container">
+    <div class="section-heading"><div><p class="eyebrow">Keep exploring</p><h2 id="more-properties-title">More available properties</h2><p>Additional homes with vacant units, straight from our property records.</p></div><a class="text-link" href="<?php echo BASE_URL; ?>/public/properties.php">Browse all homes <span aria-hidden="true">→</span></a></div>
+    <div class="property-grid"><?php foreach ($moreProperties as $property): [$image, $isPlaceholder] = property_image($property); $detailsUrl = BASE_URL . '/public/property-details.php?id=' . (int)$property['id']; ?>
+      <article class="property-card">
+        <a class="property-image" href="<?php echo e($detailsUrl); ?>" tabindex="-1" aria-hidden="true">
+          <img src="<?php echo e(BASE_URL . '/' . $image); ?>" alt="" loading="lazy" width="400" height="250">
+          <span class="availability-tag"><i aria-hidden="true"></i> <?php echo (int)$property['available_units']; ?> available</span>
+        </a>
+        <div class="property-card-body">
+          <p class="property-type"><?php echo e($property['property_type'] ?: 'Property'); ?></p>
+          <h3><a href="<?php echo e($detailsUrl); ?>"><?php echo e($property['name']); ?></a></h3>
+          <p class="property-location"><i class="fa-solid fa-location-dot" aria-hidden="true"></i> <?php echo e($property['estate'] . ', ' . $property['sub_county']); ?></p>
+          <ul class="property-facts">
+            <li><i class="fa-solid fa-bed" aria-hidden="true"></i> <?php echo e(bedroom_summary($property)); ?></li>
+            <li><i class="fa-solid fa-bath" aria-hidden="true"></i> <?php echo (int)$property['bathrooms']; ?>+ bath<?php echo (int)$property['bathrooms'] === 1 ? '' : 's'; ?></li>
+          </ul>
+          <div class="property-card-bottom"><p><span>From</span> <strong>KSh <?php echo number_format((float)$property['min_rent']); ?></strong><span> / month</span></p><a href="<?php echo e($detailsUrl); ?>" class="view-link">View home<span class="sr-only">: <?php echo e($property['name']); ?></span> <span aria-hidden="true">→</span></a></div>
+        </div>
+      </article>
+    <?php endforeach; ?></div>
+  </div></section>
+  <?php endif; ?>
+
+  <?php if ($typeCategories): ?>
+  <section class="content-section" aria-labelledby="type-categories-title"><div class="site-container">
+    <div class="section-heading"><div><p class="eyebrow">Choose your fit</p><h2 id="type-categories-title">Browse by property type</h2><p>Common property styles across Nairobi’s active listings.</p></div></div>
+    <ul class="area-grid">
+      <?php foreach ($typeCategories as $type): ?>
+        <li><a class="area-card" href="<?php echo e(BASE_URL . '/public/properties.php?' . http_build_query(['type' => $type['property_type']])); ?>">
+          <span class="area-icon" aria-hidden="true"><i class="fa-solid fa-building"></i></span>
+          <span class="area-text"><strong><?php echo e($type['property_type']); ?></strong><small><?php echo (int)$type['property_count']; ?> properties</small></span>
+          <span class="area-meta"><strong><?php echo (int)$type['unit_count']; ?> available</strong><small>from KSh <?php echo number_format((float)$type['from_rent']); ?></small></span>
+        </a></li>
+      <?php endforeach; ?>
+    </ul>
+  </div></section>
+  <?php endif; ?>
 
   <?php if ($areas): ?>
   <section class="areas-section" aria-labelledby="areas-title"><div class="site-container">

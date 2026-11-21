@@ -1130,7 +1130,7 @@ table tbody tr:hover { background-color:#f7fafb; }
 .about-hero-image img { position:relative; z-index:1; display:block; width:100%; aspect-ratio:1.32; border:6px solid #fff; border-radius:18px; object-fit:cover; box-shadow:0 18px 44px rgba(45,30,54,.16); }
 .about-hero-image figcaption { position:absolute; z-index:2; right:-5px; bottom:8px; display:flex; max-width:300px; align-items:center; gap:10px; padding:13px 15px; border:1px solid #eee6f0; border-radius:12px; background:#fff; color:#4e4055; box-shadow:0 9px 22px rgba(45,30,54,.12); font-size:.76rem; font-weight:700; line-height:1.45; }
 .about-hero-image figcaption i { color:#b45e30; font-size:1.1rem; }
-.about-purpose-section,.about-services-section,.about-benefits-section { padding:clamp(52px,7vw,84px) 0; }
+.about-purpose-section,.about-services-section,.about-benefits-section,.about-values-section { padding:clamp(52px,7vw,84px) 0; }
 .about-purpose-layout { display:grid; grid-template-columns:1fr .85fr; align-items:center; gap:clamp(30px,7vw,88px); }
 .about-section-intro h2,.about-section-heading h2,.about-benefits-layout h2 { max-width:670px; margin:0; color:var(--about-plum); font-size:clamp(1.9rem,3.5vw,2.8rem); font-weight:800; letter-spacing:-.045em; line-height:1.14; text-wrap:balance; }
 .about-section-intro>p:not(.about-eyebrow) { margin:15px 0 0; color:#655d69; font-size:.94rem; line-height:1.8; }
@@ -1152,6 +1152,11 @@ table tbody tr:hover { background-color:#f7fafb; }
 .about-card-kicker { margin:17px 0 7px; color:#ffc58f; font-size:.71rem; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
 .about-statement-card h3 { max-width:470px; margin:0; color:#fff; font-size:1.35rem; letter-spacing:-.025em; line-height:1.35; }
 .about-statement-card>p:last-child { max-width:540px; margin:10px 0 0; color:#e2dbe7; font-size:.87rem; line-height:1.7; }
+.about-values-section { background:#fff; }
+.about-values-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:14px; margin:0; padding:0; list-style:none; }
+.about-values-grid li { display:flex; min-height:132px; flex-direction:column; align-items:center; justify-content:center; gap:13px; padding:18px 12px; border:1px solid #e8e1eb; border-radius:15px; background:#fff; color:var(--about-plum); text-align:center; box-shadow:0 5px 18px rgba(47,31,59,.045); transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease; }
+.about-values-grid li>span { display:grid; width:45px; height:45px; place-items:center; border-radius:14px; background:#f6f0f8; color:#694a79; font-size:1.05rem; }
+.about-values-grid strong { font-size:.88rem; }
 .about-services-section { background:#fbf9fc; }
 .about-section-heading>p:not(.about-eyebrow) { max-width:630px; margin:11px 0 0; color:#6c6370; font-size:.9rem; line-height:1.65; }
 .about-service-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:15px; }
@@ -1183,12 +1188,13 @@ table tbody tr:hover { background-color:#f7fafb; }
 .about-signin-link i { margin-left:5px; color:var(--about-orange); }
 @media (hover:hover) and (prefers-reduced-motion:no-preference) {
   .about-button:hover { transform:translateY(-2px); }
-  .about-service-card:hover { transform:translateY(-4px); border-color:#d8c7e0; box-shadow:0 13px 27px rgba(47,31,59,.1); }
+  .about-service-card:hover,.about-values-grid li:hover { transform:translateY(-4px); border-color:#d8c7e0; box-shadow:0 13px 27px rgba(47,31,59,.1); }
 }
 @media (max-width:900px) {
   .about-hero-layout { grid-template-columns:1fr 1fr; gap:28px; }
   .about-people-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .about-service-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .about-values-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
   .about-cta-content { align-items:flex-start; flex-direction:column; }
 }
 @media (max-width:640px) {
@@ -1198,13 +1204,14 @@ table tbody tr:hover { background-color:#f7fafb; }
   .about-hero-image figcaption { right:0; max-width:260px; }
   .about-purpose-panel { padding:15px; }
   .about-mission-grid,.about-service-grid,.about-people-grid { grid-template-columns:1fr; }
+  .about-values-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .about-statement-card,.about-service-card,.about-person-card { min-height:0; }
   .about-cta-content .about-actions { width:100%; }
   .about-cta-content .about-button { flex:1 1 auto; }
 }
 @media (prefers-reduced-motion:reduce) {
-  .catalog-property-card,.catalog-property-image img,.catalog-viewing-link,.about-button,.about-service-card { transition:none; }
-  .catalog-property-card:hover,.catalog-property-card:hover .catalog-property-image img,.about-button:hover,.about-service-card:hover { transform:none; }
+  .catalog-property-card,.catalog-property-image img,.catalog-viewing-link,.about-button,.about-service-card,.about-values-grid li { transition:none; }
+  .catalog-property-card:hover,.catalog-property-card:hover .catalog-property-image img,.about-button:hover,.about-service-card:hover,.about-values-grid li:hover { transform:none; }
 }
 
 /* Contact page */

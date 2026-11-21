@@ -56,11 +56,25 @@ function is_valid_phone_number($phone) {
 }
 
 /**
- * Image for listings without an uploaded photo: a neutral "Photo coming soon" graphic.
- * A placeholder (rather than reusing real house photos) avoids two different
- * properties appearing with the same picture.
+ * Use a built-in sample photo for vacant listings when no uploaded property image is set.
+ * This keeps the home page visually consistent while still providing a real photo for each property.
  */
 function sample_property_image($property_id = null) {
+    $property_id = (int)($property_id ?? 0);
+    $sampleImages = [
+        'assets/house1.jpg',
+        'assets/house2.jpg',
+        'assets/house3.jpg',
+        'assets/house4.jpg',
+    ];
+
+    if ($property_id > 0) {
+        $imagePath = $sampleImages[($property_id - 1) % count($sampleImages)];
+        if (is_file(dirname(__DIR__) . '/' . $imagePath)) {
+            return $imagePath;
+        }
+    }
+
     return 'assets/property-placeholder.svg';
 }
 
