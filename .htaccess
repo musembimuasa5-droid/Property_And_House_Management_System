@@ -2,7 +2,7 @@ RewriteEngine On
 Options -Indexes
 AddType image/avif .avif
 
-<FilesMatch "^(\.env|\.env\.example|\.gitignore|README\.md|tailwind\.config\.js)$">
+<FilesMatch "^(\.env|\.env\.example|\.gitignore|README\.md|AGENTS\.md|CLAUDE\.md|tailwind\.config\.js)$">
     Require all denied
 </FilesMatch>
 
