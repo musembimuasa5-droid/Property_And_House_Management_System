@@ -17,15 +17,26 @@ const CONDITION_AREAS = [
     'Kitchen fittings', 'Bathroom and plumbing', 'Electrical fittings', 'Keys and access cards',
 ];
 
-/** One report with its lease, tenant, unit and inspector; $landlordId limits it to that landlord's properties. */
-function condition_report_find(PDO $db, int $id, ?int $landlordId = null): ?array {
-    $sql = "SELECT cr.*, l.tenant_id, l.start_date, l.end_date, l.status AS lease_status, l.property_id, t.full_name AS tenant_name, t.user_id AS tenant_user_id,
+/**
+ * SQL condition and values limiting properties ("p") to an owner: ['landlord_id', id] for a
+ * landlord or ['caretaker_id', user id] for a caretaker. Staff (null) see everything.
+ */
+function condition_owner_filter(?array $owner): array {
+    if ($owner === null) return ['', []];
+    [$column, $id] = $owner;
+    if (!in_array($column, ['landlord_id', 'caretaker_id'], true)) throw new InvalidArgumentException('Unknown owner column.');
+    return [" AND p.$column = ?", [(int)$id]];
+}
+
+/** One report with its lease, tenant, unit and inspector; $owner limits it to that owner's properties. */
+function condition_report_find(PDO $db, int $id, ?array $owner = null): ?array {
+    [$filter, $values] = condition_owner_filter($owner);
+    $stmt = $db->prepare("SELECT cr.*, l.tenant_id, l.start_date, l.end_date, l.status AS lease_status, l.property_id, t.full_name AS tenant_name, t.user_id AS tenant_user_id,
             p.name AS property_name, u.unit_number, ins.full_name AS inspector_name
         FROM condition_reports cr JOIN leases l ON l.id = cr.lease_id JOIN tenants t ON t.id = l.tenant_id
         JOIN properties p ON p.id = l.property_id JOIN units u ON u.id = l.unit_id JOIN users ins ON ins.id = cr.inspected_by
-        WHERE cr.id = ?" . ($landlordId ? ' AND p.landlord_id = ?' : '');
-    $stmt = $db->prepare($sql);
-    $stmt->execute($landlordId ? [$id, $landlordId] : [$id]);
+        WHERE cr.id = ?$filter");
+    $stmt->execute([$id, ...$values]);
     return $stmt->fetch() ?: null;
 }
 

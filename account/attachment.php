@@ -26,12 +26,13 @@ if ($type === 'maintenance') {
     $row = $stmt->fetch();
     if ($row && (user_can_access_module('maintenance') || (int)$row['tenant_user'] === $userId || (int)$row['assigned_staff'] === $userId)) $path = $row['image_path'];
 } elseif ($type === 'condition') {
-    $stmt = $db->prepare('SELECT i.photo_path, t.user_id AS tenant_user, ld.user_id AS landlord_user FROM condition_report_items i JOIN condition_reports cr ON cr.id = i.report_id
+    $stmt = $db->prepare('SELECT i.photo_path, t.user_id AS tenant_user, ld.user_id AS landlord_user, p.caretaker_id FROM condition_report_items i JOIN condition_reports cr ON cr.id = i.report_id
         JOIN leases l ON l.id = cr.lease_id JOIN tenants t ON t.id = l.tenant_id JOIN properties p ON p.id = l.property_id JOIN landlords ld ON ld.id = p.landlord_id WHERE i.id = ?');
     $stmt->execute([$id]);
     $row = $stmt->fetch();
     $allowed = $row && (user_can_access_module('condition_reports') || user_can_access_module('deposits')
-        || (int)$row['tenant_user'] === $userId || ($user['role_name'] === 'Landlord' && (int)$row['landlord_user'] === $userId));
+        || (int)$row['tenant_user'] === $userId || ($user['role_name'] === 'Landlord' && (int)$row['landlord_user'] === $userId)
+        || ($user['role_name'] === 'Caretaker' && (int)$row['caretaker_id'] === $userId));
     if ($allowed) $path = $row['photo_path'];
 }
 if (!$path) attachment_not_found();

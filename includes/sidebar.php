@@ -43,6 +43,7 @@ $unreadNotices = $currentUser ? shell_notifications((int)$currentUser['id'])['un
             <?php sidebarModules('landlord'); ?>
         <?php elseif ($role === 'Caretaker'): ?>
             <?php sidebarHeading('Work'); sidebarLink('caretaker/dashboard.php#assigned-requests', 'fa-screwdriver-wrench', 'Assigned Requests'); ?>
+            <?php sidebarModules('caretaker'); ?>
         <?php elseif ($role === 'Tenant'): ?>
             <?php sidebarHeading('My tenancy'); sidebarLink('tenant/rent.php', 'fa-receipt', 'Rent & Statement'); sidebarLink('tenant/payments.php', 'fa-money-bill-wave', 'Payment History'); sidebarLink('tenant/bills.php', 'fa-droplet', 'Utility Bills'); sidebarLink('tenant/documents.php', 'fa-file', 'Lease Documents'); sidebarLink('tenant/deposit.php', 'fa-clipboard-check', 'Deposit & Condition'); ?>
             <?php sidebarHeading('Help'); sidebarLink('tenant/maintenance.php', 'fa-screwdriver-wrench', 'Maintenance'); sidebarLink('tenant/complaints.php', 'fa-triangle-exclamation', 'Complaints'); ?>

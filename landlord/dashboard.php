@@ -28,12 +28,14 @@ include __DIR__ . '/../includes/layout_top.php';
     <div>
         <p class="page-eyebrow"><?php echo e(date('l, d F Y')); ?></p>
         <h1 class="text-2xl font-bold text-gray-900">Welcome, <?php echo e($landlord['full_name']); ?></h1>
-        <p class="text-sm text-gray-500">Your <?php echo count($properties); ?> properties, occupancy and rental income at a glance.</p>
+        <p class="text-sm text-gray-500">Your <?php echo count($properties); ?> properties, tenants and rental income at a glance. You can run lettings yourself: add a tenant, write the lease, bill the month and record payments.</p>
     </div>
     <div class="flex flex-wrap gap-2">
-        <a class="btn btn-primary" href="<?php echo e(module_url('my_properties', ['action' => 'create'])); ?>"><i class="fa-solid fa-plus" aria-hidden="true"></i> Add property</a>
+        <a class="btn btn-primary" href="<?php echo e(module_url('my_payments', ['action' => 'create'])); ?>"><i class="fa-solid fa-money-bill-wave" aria-hidden="true"></i> Record payment</a>
+        <a class="btn btn-secondary" href="<?php echo e(module_url('my_tenants', ['action' => 'create'])); ?>"><i class="fa-solid fa-user-plus" aria-hidden="true"></i> Add tenant</a>
+        <a class="btn btn-secondary" href="<?php echo e(module_url('my_leases', ['action' => 'create'])); ?>"><i class="fa-solid fa-file-signature" aria-hidden="true"></i> New lease</a>
+        <a class="btn btn-secondary" href="<?php echo e(module_url('my_properties', ['action' => 'create'])); ?>"><i class="fa-solid fa-plus" aria-hidden="true"></i> Add property</a>
         <a class="btn btn-secondary" href="<?php echo e(module_url('my_units', ['action' => 'create'])); ?>"><i class="fa-solid fa-door-open" aria-hidden="true"></i> Add unit</a>
-        <a class="btn btn-secondary" href="<?php echo e($reportUrl('income')); ?>"><i class="fa-solid fa-scale-balanced" aria-hidden="true"></i> Income statement</a>
     </div>
 </div>
 

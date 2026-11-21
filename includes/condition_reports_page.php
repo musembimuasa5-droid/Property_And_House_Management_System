@@ -1,11 +1,16 @@
 <?php
 /**
- * Condition reports page shared by the staff portal (create, view, delete) and the
- * landlord portal (read-only, own properties). The including page checks access and sets
- * $conditionLandlordId (null for staff), $conditionCanEdit and $conditionPageUrl.
+ * Condition reports page shared by the staff, landlord and caretaker portals. The including
+ * page checks access and sets:
+ *   $conditionOwner          null for staff, ['landlord_id', id] or ['caretaker_id', user id]
+ *   $conditionCanEdit        may record new reports
+ *   $conditionCanDelete      may delete a report the tenant has not answered yet
+ *   $conditionDepositsModule deposit ledger module to link to, or null to hide deposit details
+ *   $conditionPageUrl        this page
  */
 
-if (!isset($conditionPageUrl) || !isset($conditionCanEdit) || !array_key_exists('conditionLandlordId', get_defined_vars())) {
+$conditionSettings = ['conditionOwner', 'conditionCanEdit', 'conditionCanDelete', 'conditionDepositsModule', 'conditionPageUrl'];
+if (array_diff($conditionSettings, array_keys(get_defined_vars()))) {
     http_response_code(404);
     exit();
 }
@@ -33,15 +38,17 @@ function condition_uploaded_photo(int $index): ?array {
         'error' => $files['error'][$index], 'size' => $files['size'][$index]];
 }
 
-/** Validate and store a new report. Returns [form values, errors]; redirects on success. */
-function condition_save(PDO $db, array $form, string $pageUrl): array {
+/** Validate and store a new report for a lease within $owner's properties. Returns [form values, errors]; redirects on success. */
+function condition_save(PDO $db, array $form, string $pageUrl, ?array $owner): array {
     $text = fn($key) => is_string($_POST[$key] ?? null) ? trim($_POST[$key]) : '';
     $form['lease_id'] = $text('lease_id');
     foreach (['report_type', 'inspection_date', 'overall_condition', 'general_notes'] as $key) $form[$key] = $text($key);
     $errors = [];
 
-    $lease = $db->prepare('SELECT l.id, t.user_id, u.unit_number FROM leases l JOIN tenants t ON t.id = l.tenant_id JOIN units u ON u.id = l.unit_id WHERE l.id = ?');
-    $lease->execute([(int)$form['lease_id']]);
+    [$ownerFilter, $ownerValues] = condition_owner_filter($owner);
+    $lease = $db->prepare("SELECT l.id, t.user_id, t.full_name, u.unit_number, p.name AS property_name FROM leases l JOIN tenants t ON t.id = l.tenant_id
+        JOIN units u ON u.id = l.unit_id JOIN properties p ON p.id = l.property_id WHERE l.id = ?$ownerFilter");
+    $lease->execute([(int)$form['lease_id'], ...$ownerValues]);
     $lease = $lease->fetch();
     if (!$lease) $errors[] = 'Choose the lease this inspection belongs to.';
     if (!in_array($form['report_type'], CONDITION_REPORT_TYPES, true)) $errors[] = 'Choose Move-in or Move-out.';
@@ -91,6 +98,11 @@ function condition_save(PDO $db, array $form, string $pageUrl): array {
         }
         notify_user($db, $lease['user_id'], "{$form['report_type']} condition report ready",
             "The {$form['report_type']} inspection of unit {$lease['unit_number']} has been recorded. Please review it under Deposit & Condition and agree or raise a dispute.");
+        // A caretaker's inspection is evidence for a deposit decision, so management is told to review it.
+        if (($owner[0] ?? null) === 'caretaker_id') {
+            notify_roles($db, MANAGEMENT_ROLES, "{$form['report_type']} report by caretaker",
+                ($_SESSION['full_name'] ?? 'A caretaker') . " recorded the {$form['report_type']} inspection of {$lease['property_name']} / {$lease['unit_number']} ({$lease['full_name']}). Report #$reportId.");
+        }
         $db->commit();
     } catch (PDOException $e) {
         if ($db->inTransaction()) $db->rollBack();
@@ -105,9 +117,9 @@ function condition_save(PDO $db, array $form, string $pageUrl): array {
     return [$form, []];
 }
 
-function condition_delete(PDO $db, string $pageUrl): void {
+function condition_delete(PDO $db, string $pageUrl, ?array $owner): void {
     $id = (int)filter_var($_POST['id'] ?? 0, FILTER_VALIDATE_INT);
-    $report = $id ? condition_report_find($db, $id) : null;
+    $report = $id ? condition_report_find($db, $id, $owner) : null;
     $linked = $db->prepare('SELECT COUNT(*) FROM deposit_transactions WHERE condition_report_id = ?');
     $linked->execute([$id]);
     if (!$report) {
@@ -136,9 +148,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         condition_redirect($conditionPageUrl);
     }
     $operation = $_POST['_action'] ?? '';
-    if ($operation === 'delete') condition_delete($db, $conditionPageUrl);
+    if ($operation === 'delete') {
+        if (!$conditionCanDelete) {
+            set_flash('error', 'Ask management to delete a condition report.');
+            condition_redirect($conditionPageUrl);
+        }
+        condition_delete($db, $conditionPageUrl, $conditionOwner);
+    }
     if ($operation === 'save') {
-        [$form, $errors] = condition_save($db, $form, $conditionPageUrl);
+        [$form, $errors] = condition_save($db, $form, $conditionPageUrl, $conditionOwner);
         $action = 'create';
         http_response_code(422);
     }
@@ -146,7 +164,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $report = null;
 if ($action === 'view') {
-    $report = condition_report_find($db, (int)filter_var($_GET['id'] ?? 0, FILTER_VALIDATE_INT), $conditionLandlordId);
+    $report = condition_report_find($db, (int)filter_var($_GET['id'] ?? 0, FILTER_VALIDATE_INT), $conditionOwner);
     if (!$report) {
         set_flash('error', 'Condition report not found.');
         condition_redirect($conditionPageUrl);
@@ -174,25 +192,32 @@ if ($action === 'view'):
         <?php if ($report['report_type'] === 'Move-out' && $baseline === null): ?><p class="text-xs text-gray-500">No move-in report exists for this lease, so there is nothing to compare against.</p><?php endif; ?>
         <?php render_condition_response($report); ?>
     </section>
-    <?php $deposit = deposit_summary($db, (int)$report['lease_id']); ?>
     <section class="bg-white p-6 rounded-xl border border-gray-100 shadow-sm" aria-labelledby="deposit-heading">
+        <?php if ($conditionDepositsModule): $deposit = deposit_summary($db, (int)$report['lease_id']); ?>
         <h2 id="deposit-heading" class="font-bold text-gray-900 mb-3">Deposit for this lease</h2>
         <p class="text-sm">Agreed <?php echo format_currency($deposit['agreed']); ?> · received <?php echo format_currency($deposit['received']); ?> · deducted <?php echo format_currency($deposit['deducted']); ?> · refunded <?php echo format_currency($deposit['refunded']); ?> · <strong>held <?php echo format_currency($deposit['held']); ?></strong> <?php echo render_status_badge($deposit['status']); ?></p>
+        <?php else: ?>
+        <h2 id="deposit-heading" class="font-bold text-gray-900 mb-3">Next steps</h2>
+        <p class="text-sm text-gray-600">Management decides any deposit deduction from this report.</p>
+        <?php endif; ?>
         <div class="flex flex-wrap gap-2 mt-4">
-            <?php if ($conditionCanEdit && $report['report_type'] === 'Move-out' && user_can_access_module('deposits')): ?>
-                <a class="btn btn-accent" href="<?php echo e(module_url('deposits', ['action' => 'create', 'lease_id' => $report['lease_id'], 'transaction_type' => 'Deduction', 'condition_report_id' => $report['id']])); ?>">Record a deduction</a>
+            <?php if ($conditionCanEdit && $report['report_type'] === 'Move-out' && $conditionDepositsModule && user_can_access_module($conditionDepositsModule)): ?>
+                <a class="btn btn-accent" href="<?php echo e(module_url($conditionDepositsModule, ['action' => 'create', 'lease_id' => $report['lease_id'], 'transaction_type' => 'Deduction', 'condition_report_id' => $report['id']])); ?>">Record a deduction</a>
             <?php endif; ?>
             <?php if ($conditionCanEdit && $report['report_type'] === 'Move-in'): ?>
                 <a class="btn btn-secondary" href="<?php echo e($conditionPageUrl . '?' . http_build_query(['action' => 'create', 'lease_id' => $report['lease_id'], 'report_type' => 'Move-out'])); ?>">Start move-out report</a>
             <?php endif; ?>
-            <?php if ($conditionCanEdit && $report['tenant_response'] === 'Pending'): ?>
+            <?php if ($conditionCanDelete && $report['tenant_response'] === 'Pending'): ?>
                 <form method="post" action="<?php echo e($conditionPageUrl); ?>" data-confirm="Delete this condition report and its photos?"><?php echo csrf_field(); ?><input type="hidden" name="_action" value="delete"><input type="hidden" name="id" value="<?php echo (int)$report['id']; ?>"><button type="submit" class="btn btn-danger">Delete report</button></form>
             <?php endif; ?>
         </div>
     </section>
 <?php elseif ($action === 'create'):
-    $leases = $db->query("SELECT l.id, CONCAT(t.full_name, ' — ', p.name, ' / ', u.unit_number, ' (', l.status, ')') FROM leases l JOIN tenants t ON t.id = l.tenant_id
-        JOIN units u ON u.id = l.unit_id JOIN properties p ON p.id = l.property_id ORDER BY l.status = 'Active' DESC, t.full_name")->fetchAll(PDO::FETCH_KEY_PAIR);
+    [$ownerFilter, $ownerValues] = condition_owner_filter($conditionOwner);
+    $leases = $db->prepare("SELECT l.id, CONCAT(t.full_name, ' — ', p.name, ' / ', u.unit_number, ' (', l.status, ')') FROM leases l JOIN tenants t ON t.id = l.tenant_id
+        JOIN units u ON u.id = l.unit_id JOIN properties p ON p.id = l.property_id WHERE 1 = 1$ownerFilter ORDER BY l.status = 'Active' DESC, t.full_name");
+    $leases->execute($ownerValues);
+    $leases = $leases->fetchAll(PDO::FETCH_KEY_PAIR);
     $select = function (string $id, string $name, array $options, string $value, string $label) {
         echo '<label for="' . e($id) . '" class="block text-xs font-semibold text-gray-600 uppercase mb-1">' . e($label) . ' <span class="text-red-600" aria-hidden="true">*</span></label>';
         echo '<select id="' . e($id) . '" name="' . e($name) . '" required class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">';
@@ -217,7 +242,8 @@ if ($action === 'view'):
             <div class="md:col-span-2"><label for="cr-notes" class="block text-xs font-semibold text-gray-600 uppercase mb-1">General notes</label>
                 <textarea id="cr-notes" name="general_notes" rows="3" maxlength="3000" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"><?php echo e($form['general_notes']); ?></textarea></div>
         </div>
-        <fieldset>
+        <?php // min-w-0: a fieldset is min-content wide by default, which would stop the table from scrolling on phones. ?>
+        <fieldset class="min-w-0">
             <legend class="font-bold text-gray-900 mb-2">Checklist</legend>
             <div class="overflow-x-auto"><table class="w-full text-left text-sm">
                 <thead><tr><th scope="col" class="p-2">Area</th><th scope="col" class="p-2">Condition</th><th scope="col" class="p-2">Remarks</th><th scope="col" class="p-2">Photo (JPG or PNG, up to 5 MB)</th></tr></thead>
@@ -239,9 +265,8 @@ if ($action === 'view'):
         <div class="flex flex-wrap gap-3 pt-4 border-t border-gray-100"><button type="submit" class="btn btn-primary">Save report</button><a href="<?php echo e($conditionPageUrl); ?>" class="btn btn-secondary">Cancel</a></div>
     </form>
 <?php else:
-    $where = [];
-    $params = [];
-    if ($conditionLandlordId) { $where[] = 'p.landlord_id = ?'; $params[] = $conditionLandlordId; }
+    [$ownerFilter, $params] = condition_owner_filter($conditionOwner);
+    $where = $ownerFilter !== '' ? [substr($ownerFilter, strlen(' AND '))] : [];
     $filters = ['report_type' => CONDITION_REPORT_TYPES, 'tenant_response' => ['Pending', 'Agreed', 'Disputed']];
     $active = [];
     foreach ($filters as $key => $allowed) {

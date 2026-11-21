@@ -30,7 +30,7 @@ function report_catalog(): array {
             'description' => 'Active leases ending in the period, so renewals can be planned.'],
         'deposits' => ['title' => 'Deposit ledger', 'icon' => 'fa-vault', 'range' => 'none', 'landlord' => true,
             'description' => 'Deposits agreed, received, deducted, refunded and still held, per lease.'],
-        'statement' => ['title' => 'Tenant statement', 'icon' => 'fa-user-clock', 'range' => 'year_to_date', 'landlord' => false,
+        'statement' => ['title' => 'Tenant statement', 'icon' => 'fa-user-clock', 'range' => 'year_to_date', 'landlord' => true,
             'description' => 'Charges and payments for one tenant with a running balance.'],
     ];
 }
@@ -112,33 +112,80 @@ function report_collections(PDO $db, array $params): array {
     ];
 }
 
+/** Ageing bands for unpaid rent, by days since the charge fell due. */
+const ARREARS_AGE_BANDS = [
+    'not_due' => 'Not yet due',
+    'days_1_30' => '1–30 days',
+    'days_31_60' => '31–60 days',
+    'days_61_90' => '61–90 days',
+    'days_over_90' => 'Over 90 days',
+];
+
+/** Band of an unpaid charge given the days since its due date (zero or less means not yet due). */
+function arrears_age_band(int $daysOverdue): string {
+    if ($daysOverdue <= 0) return 'not_due';
+    if ($daysOverdue <= 30) return 'days_1_30';
+    if ($daysOverdue <= 60) return 'days_31_60';
+    if ($daysOverdue <= 90) return 'days_61_90';
+    return 'days_over_90';
+}
+
+/**
+ * Unpaid rent per lease, split into ageing bands. Each unpaid charge is placed in the band of
+ * its own due date, so a tenant who owes for three months shows money in three bands: older
+ * debt is harder to recover and is followed up first.
+ */
 function report_arrears(PDO $db, array $params): array {
     [$scope, $values] = report_scope($params);
-    $rows = report_query($db, "SELECT t.full_name AS tenant, t.phone, CONCAT(p.name, ' / ', u.unit_number) AS unit, l.status AS lease_status,
-            SUM(rc.total_due) AS billed, SUM(COALESCE(pa.paid, 0)) AS paid, SUM(rc.total_due - COALESCE(pa.paid, 0)) AS balance,
-            SUM(CASE WHEN rc.due_date < CURDATE() THEN rc.total_due - COALESCE(pa.paid, 0) ELSE 0 END) AS overdue,
-            MIN(CASE WHEN rc.total_due - COALESCE(pa.paid, 0) > 0 THEN rc.due_date END) AS oldest_due
+    $charges = report_query($db, "SELECT rc.lease_id, t.full_name AS tenant, t.phone, CONCAT(p.name, ' / ', u.unit_number) AS unit, l.status AS lease_status,
+            rc.due_date, rc.total_due - COALESCE(pa.paid, 0) AS outstanding, DATEDIFF(CURDATE(), rc.due_date) AS days_late
         FROM rent_charges rc JOIN leases l ON l.id = rc.lease_id JOIN tenants t ON t.id = rc.tenant_id JOIN units u ON u.id = rc.unit_id
         JOIN properties p ON p.id = l.property_id LEFT JOIN " . CHARGE_PAID_SUBQUERY . " pa ON pa.rent_charge_id = rc.id
-        WHERE 1 = 1 $scope
-        GROUP BY rc.lease_id, t.full_name, t.phone, p.name, u.unit_number, l.status
-        HAVING balance > 0.004 ORDER BY overdue DESC, balance DESC", $values);
-    $today = strtotime(date('Y-m-d'));
-    foreach ($rows as &$row) $row['days_overdue'] = $row['oldest_due'] && strtotime($row['oldest_due']) < $today ? (int)(($today - strtotime($row['oldest_due'])) / 86400) : 0;
-    unset($row);
-    $totals = report_sum($rows, ['billed', 'paid', 'balance', 'overdue']);
+        WHERE rc.total_due - COALESCE(pa.paid, 0) > 0.004 $scope
+        ORDER BY rc.due_date, rc.id", $values);
+
+    $bands = array_keys(ARREARS_AGE_BANDS);
+    $rows = [];
+    $chargesPerBand = array_fill_keys($bands, 0);
+    foreach ($charges as $charge) {
+        $lease = $charge['lease_id'];
+        $rows[$lease] ??= ['tenant' => $charge['tenant'], 'phone' => $charge['phone'], 'unit' => $charge['unit'], 'lease_status' => $charge['lease_status'],
+            'balance' => 0.0, 'overdue' => 0.0] + array_fill_keys($bands, 0.0) + ['oldest_due' => $charge['due_date'], 'days_overdue' => 0];
+        $band = arrears_age_band((int)$charge['days_late']);
+        $amount = (float)$charge['outstanding'];
+        $rows[$lease][$band] += $amount;
+        $rows[$lease]['balance'] += $amount;
+        if ($band !== 'not_due') $rows[$lease]['overdue'] += $amount;
+        $rows[$lease]['days_overdue'] = max($rows[$lease]['days_overdue'], (int)$charge['days_late']);
+        $chargesPerBand[$band]++;
+    }
+    $rows = array_values($rows);
+    usort($rows, fn($a, $b) => [$b['overdue'], $b['balance']] <=> [$a['overdue'], $a['balance']]);
+    $totals = report_sum($rows, ['balance', 'overdue', ...$bands]);
+
+    $ageing = [];
+    foreach (ARREARS_AGE_BANDS as $key => $label) {
+        $ageing[] = ['band' => $label, 'tenants' => count(array_filter($rows, fn($row) => $row[$key] > 0.004)), 'charges' => $chargesPerBand[$key],
+            'amount' => $totals[$key], 'share' => $totals['balance'] > 0 ? $totals[$key] / $totals['balance'] * 100 : 0];
+    }
+    $bandColumns = array_map(fn($label) => ['label' => $label, 'format' => 'currency'], ARREARS_AGE_BANDS);
+    $over60 = $totals['days_61_90'] + $totals['days_over_90'];
     return [
         'title' => 'Arrears',
-        'subtitle' => 'Unpaid rent as of ' . format_date(date('Y-m-d')),
+        'subtitle' => 'Unpaid rent as of ' . format_date(date('Y-m-d')) . ', by age',
         'columns' => [
             'tenant' => ['label' => 'Tenant'], 'phone' => ['label' => 'Phone'], 'unit' => ['label' => 'Property / unit'], 'lease_status' => ['label' => 'Lease', 'format' => 'badge'],
-            'billed' => ['label' => 'Billed', 'format' => 'currency'], 'paid' => ['label' => 'Paid', 'format' => 'currency'],
-            'balance' => ['label' => 'Balance', 'format' => 'currency'], 'overdue' => ['label' => 'Overdue', 'format' => 'currency'],
+            'balance' => ['label' => 'Balance', 'format' => 'currency'],
+        ] + $bandColumns + [
             'oldest_due' => ['label' => 'Oldest unpaid', 'format' => 'date'], 'days_overdue' => ['label' => 'Days overdue', 'format' => 'number'],
         ],
         'rows' => $rows,
         'totals' => $totals,
-        'summary' => [['Total outstanding', format_currency($totals['balance'])], ['Overdue', format_currency($totals['overdue'])], ['Tenants in arrears', count(array_filter($rows, fn($row) => $row['overdue'] > 0))]],
+        'summary' => [['Total outstanding', format_currency($totals['balance'])], ['Overdue', format_currency($totals['overdue'])],
+            ['Over 60 days', format_currency($over60)], ['Tenants in arrears', count(array_filter($rows, fn($row) => $row['overdue'] > 0))]],
+        'breakdown' => ['title' => 'Ageing summary', 'columns' => ['band' => ['label' => 'Age of debt'], 'tenants' => ['label' => 'Tenants', 'format' => 'number'],
+            'charges' => ['label' => 'Unpaid charges', 'format' => 'number'], 'amount' => ['label' => 'Amount', 'format' => 'currency'], 'share' => ['label' => 'Share of outstanding', 'format' => 'percent']],
+            'rows' => $ageing],
     ];
 }
 
@@ -324,27 +371,46 @@ function report_deposits(PDO $db, array $params): array {
     ];
 }
 
+/**
+ * Tenants whose statement may be shown, as [id => label]: everyone for staff, and for a landlord
+ * the tenants they registered or who lease one of their units. With $onlyId, just that tenant.
+ */
+function report_statement_tenants(PDO $db, ?int $landlordId, ?int $onlyId = null): array {
+    $where = [];
+    $values = [];
+    if ($landlordId) {
+        $where[] = '(t.landlord_id = ? OR t.id IN (SELECT l.tenant_id FROM leases l JOIN properties p ON p.id = l.property_id WHERE p.landlord_id = ?))';
+        array_push($values, $landlordId, $landlordId);
+    }
+    if ($onlyId) { $where[] = 't.id = ?'; $values[] = $onlyId; }
+    $stmt = $db->prepare("SELECT t.id, CONCAT(t.full_name, ' — ID ', t.national_id) FROM tenants t" . ($where ? ' WHERE ' . implode(' AND ', $where) : '') . ' ORDER BY t.full_name');
+    $stmt->execute($values);
+    return $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+}
+
 function report_statement(PDO $db, array $params): array {
     $base = ['title' => 'Tenant statement', 'subtitle' => report_period_label($params), 'rows' => [],
         'columns' => ['entry_date' => ['label' => 'Date', 'format' => 'date'], 'description' => ['label' => 'Description'], 'debit' => ['label' => 'Charged', 'format' => 'currency'],
             'credit' => ['label' => 'Paid', 'format' => 'currency'], 'balance' => ['label' => 'Balance', 'format' => 'currency']]];
     $tenant = null;
-    if ($params['tenant_id']) {
-        $stmt = $db->prepare('SELECT id, full_name, phone FROM tenants WHERE id = ?');
-        $stmt->execute([$params['tenant_id']]);
-        $tenant = $stmt->fetch();
+    $landlord = $params['landlord_id'] ? (int)$params['landlord_id'] : null;
+    if ($params['tenant_id'] && report_statement_tenants($db, $landlord, (int)$params['tenant_id'])) {
+        $tenant = report_query($db, 'SELECT id, full_name, phone FROM tenants WHERE id = ?', [$params['tenant_id']])[0];
     }
     if (!$tenant) return $base + ['notice' => 'Choose a tenant to see their statement.'];
 
-    $opening = report_query($db, 'SELECT
-            COALESCE((SELECT SUM(total_due) FROM rent_charges WHERE tenant_id = ? AND due_date < ?), 0)
-          - COALESCE((SELECT SUM(amount) FROM payments WHERE tenant_id = ? AND payment_date < ?), 0) AS opening',
+    // A landlord's statement covers only charges and payments on their own properties.
+    $charges = $landlord ? " AND rc.lease_id IN (SELECT l.id FROM leases l JOIN properties p ON p.id = l.property_id WHERE p.landlord_id = $landlord)" : '';
+    $payments = $landlord ? " AND pay.property_id IN (SELECT id FROM properties WHERE landlord_id = $landlord)" : '';
+    $opening = report_query($db, "SELECT
+            COALESCE((SELECT SUM(rc.total_due) FROM rent_charges rc WHERE rc.tenant_id = ? AND rc.due_date < ?$charges), 0)
+          - COALESCE((SELECT SUM(pay.amount) FROM payments pay WHERE pay.tenant_id = ? AND pay.payment_date < ?$payments), 0) AS opening",
         [$tenant['id'], $params['from'], $tenant['id'], $params['from']])[0]['opening'];
     $entries = report_query($db, "SELECT rc.due_date AS entry_date, CONCAT('Rent charge for ', DATE_FORMAT(STR_TO_DATE(CONCAT(rc.billing_period, '-01'), '%Y-%m-%d'), '%b %Y')) AS description, rc.total_due AS debit, 0 AS credit, 0 AS sort_order
-            FROM rent_charges rc WHERE rc.tenant_id = ? AND rc.due_date BETWEEN ? AND ?
+            FROM rent_charges rc WHERE rc.tenant_id = ? AND rc.due_date BETWEEN ? AND ?$charges
         UNION ALL
         SELECT pay.payment_date, CONCAT('Payment ', pay.receipt_number, ' (', pay.payment_method, ' ', pay.transaction_reference, ')'), 0, pay.amount, 1
-            FROM payments pay WHERE pay.tenant_id = ? AND pay.payment_date BETWEEN ? AND ?
+            FROM payments pay WHERE pay.tenant_id = ? AND pay.payment_date BETWEEN ? AND ?$payments
         ORDER BY entry_date, sort_order", [$tenant['id'], $params['from'], $params['to'], $tenant['id'], $params['from'], $params['to']]);
 
     $balance = (float)$opening;

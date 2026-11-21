@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS landlords (
 CREATE TABLE IF NOT EXISTS properties (
     id INT AUTO_INCREMENT PRIMARY KEY,
     landlord_id INT NOT NULL,
+    caretaker_id INT NULL, -- also in migrations/003
     name VARCHAR(150) NOT NULL,
     property_type ENUM('Apartment', 'Flats', 'Bedsitters', 'Maisonettes', 'Townhouses', 'Commercial', 'Student Housing', 'Mixed Use', 'Single Family', 'Other') NOT NULL,
     description TEXT,
@@ -71,7 +72,8 @@ CREATE TABLE IF NOT EXISTS properties (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (landlord_id) REFERENCES landlords(id) ON DELETE RESTRICT,
-    FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE RESTRICT
+    FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_properties_caretaker FOREIGN KEY (caretaker_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 -- 6. Units Table
@@ -99,6 +101,7 @@ CREATE TABLE IF NOT EXISTS units (
 CREATE TABLE IF NOT EXISTS tenants (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NULL,
+    landlord_id INT NULL, -- landlord who registered the tenant; also in migrations/003
     full_name VARCHAR(100) NOT NULL,
     phone VARCHAR(20) NOT NULL,
     email VARCHAR(150) NOT NULL,
@@ -113,7 +116,8 @@ CREATE TABLE IF NOT EXISTS tenants (
     profile_photo VARCHAR(255),
     status ENUM('Active', 'Inactive', 'Evicted', 'Blacklisted') DEFAULT 'Active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+    CONSTRAINT fk_tenants_landlord FOREIGN KEY (landlord_id) REFERENCES landlords(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 -- 8. Leases Table

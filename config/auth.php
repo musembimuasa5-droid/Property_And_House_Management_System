@@ -66,6 +66,12 @@ function requireLandlordProfile() {
     return $landlord;
 }
 
+/** The signed-in caretaker's user id, which properties.caretaker_id refers to; other roles are refused. */
+function caretaker_user_id(): int {
+    requireRole('Caretaker');
+    return (int)$_SESSION['user_id'];
+}
+
 /** Fields never written to the audit log, even as before/after values. */
 const AUDIT_HIDDEN_FIELDS = ['password', 'password_hash', 'csrf_token'];
 

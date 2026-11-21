@@ -70,16 +70,18 @@ function charge_due_date(string $period, int $due_day): string {
 
 /**
  * Raise one rent charge per active lease for a billing period, skipping leases
- * already charged. Returns [created, skipped].
+ * already charged. A landlord id limits the run to that landlord's properties.
+ * Returns [created, skipped].
  */
-function generate_rent_charges(PDO $db, string $period): array {
+function generate_rent_charges(PDO $db, string $period, ?int $landlordId = null): array {
     $start = $period . '-01';
     $end = date('Y-m-t', strtotime($start));
     $leases = $db->prepare("SELECT l.id, l.tenant_id, l.unit_id, l.monthly_rent, l.payment_due_day, u.service_charge,
             EXISTS(SELECT 1 FROM rent_charges rc WHERE rc.lease_id = l.id AND rc.billing_period = ?) AS already_charged
         FROM leases l JOIN units u ON u.id = l.unit_id
-        WHERE l.status = 'Active' AND l.start_date <= ? AND l.end_date >= ?");
-    $leases->execute([$period, $end, $start]);
+        WHERE l.status = 'Active' AND l.start_date <= ? AND l.end_date >= ?"
+        . ($landlordId ? ' AND l.property_id IN (SELECT id FROM properties WHERE landlord_id = ?)' : ''));
+    $leases->execute($landlordId ? [$period, $end, $start, $landlordId] : [$period, $end, $start]);
     $insert = $db->prepare("INSERT INTO rent_charges (lease_id, tenant_id, unit_id, billing_period, rent_amount, service_charge, water_bill, previous_balance, total_due, due_date, status)
         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, 'Unpaid')");
 
@@ -111,13 +113,17 @@ const ARREARS_REMINDER_TITLE = 'Rent arrears reminder';
 
 /**
  * Notify every tenant with an overdue balance, at most once a day each. Tenants without a
- * portal login cannot receive in-system notices. Returns [sent, skipped].
+ * portal login cannot receive in-system notices. A landlord id limits the run (and the amount
+ * stated) to that landlord's properties. Returns [sent, skipped].
  */
-function send_arrears_reminders(PDO $db): array {
-    $overdue = $db->query("SELECT t.id, t.user_id, t.full_name, SUM(rc.total_due - COALESCE(pa.paid, 0)) AS overdue, MIN(rc.due_date) AS oldest_due
+function send_arrears_reminders(PDO $db, ?int $landlordId = null): array {
+    $overdue = $db->prepare("SELECT t.id, t.user_id, t.full_name, SUM(rc.total_due - COALESCE(pa.paid, 0)) AS overdue, MIN(rc.due_date) AS oldest_due
         FROM rent_charges rc JOIN tenants t ON t.id = rc.tenant_id LEFT JOIN " . CHARGE_PAID_SUBQUERY . " pa ON pa.rent_charge_id = rc.id
-        WHERE rc.due_date < CURDATE() AND rc.total_due - COALESCE(pa.paid, 0) > 0.004
-        GROUP BY t.id, t.user_id, t.full_name")->fetchAll();
+        WHERE rc.due_date < CURDATE() AND rc.total_due - COALESCE(pa.paid, 0) > 0.004"
+        . ($landlordId ? ' AND rc.lease_id IN (SELECT l.id FROM leases l JOIN properties p ON p.id = l.property_id WHERE p.landlord_id = ?)' : '') . "
+        GROUP BY t.id, t.user_id, t.full_name");
+    $overdue->execute($landlordId ? [$landlordId] : []);
+    $overdue = $overdue->fetchAll();
     $recent = $db->prepare('SELECT COUNT(*) FROM notifications WHERE user_id = ? AND title = ? AND created_at > NOW() - INTERVAL 1 DAY');
     $sent = 0;
     $skipped = 0;

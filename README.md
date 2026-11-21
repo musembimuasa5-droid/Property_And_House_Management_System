@@ -12,6 +12,7 @@ A PHP/PDO and MySQL (MariaDB) web application for managing residential rental pr
    C:\xampp\mysql\bin\mysqldump.exe -u root nairobi_property_db > backup-before-migration.sql
    Get-Content database\migrations\001_create_enquiries.sql | & C:\xampp\mysql\bin\mysql.exe -u root nairobi_property_db
    Get-Content database\migrations\002_condition_deposit_security.sql | & C:\xampp\mysql\bin\mysql.exe -u root nairobi_property_db
+   Get-Content database\migrations\003_landlord_caretaker_portals.sql | & C:\xampp\mysql\bin\mysql.exe -u root nairobi_property_db
    ```
 4. Copy `.env.example` to `.env` and configure the database values. The default local connection uses `localhost:3306`, database `nairobi_property_db`, user `root`, and an empty password.
 5. Visit `http://localhost/Property_And_House_Management_System/`.
@@ -30,12 +31,13 @@ Seeded user rows use a bundled development bcrypt hash. The original seed commen
 - Tenant account registration, portal, payment history with printable receipts, rent statement with live balances, utility bills, maintenance requests (submit, track, cancel), complaints with management responses, profile, lease list, and notices.
 - Management dashboard with KPI tiles, a six-month collections vs expenses chart, occupancy meters, arrears, expiring leases, recent payments, open maintenance and pending viewings.
 - Full create/read/update/delete for every management module, with search, filters, pagination and CSV export (see below).
-- Nine printable reports with CSV export, including a deposit ledger.
+- Nine printable reports with CSV export, including a deposit ledger and an arrears report split into ageing bands (not yet due, 1–30, 31–60, 61–90 and over 90 days) with an ageing summary.
 - Move-in and move-out condition reports: a fixed checklist of areas with optional photos. Tenants agree with or dispute each report; a move-out report is compared line by line with the move-in report, and deposit deductions link to the report that justifies them.
 - Deposit ledger: deposits received, itemised deductions with reasons, and refunds, with checks that deductions and refunds never exceed the deposit held.
 - Maintenance requests accept an optional photo and keep a time-stamped status history.
 - Security and privacy: sign-in throttling (5 failures per email in 15 minutes), a 30-minute idle timeout, an audit log with before and after values that a Super Admin can search, a privacy notice with consent at registration, and private photo folders served only after an access check (`account/attachment.php`).
-- Landlord dashboard with a photo card for each property. Landlords can add and edit their own properties, photos and units; reports are limited to their own properties. Caretaker dashboard for updating assigned maintenance jobs.
+- Landlord self-service, so a small landlord can run lettings without a manager: their own properties, units, tenants, leases, condition reports, monthly charges, payments with receipts, deposit ledger, meter readings and reports (including tenant statements), all limited to their own properties.
+- Caretaker portal for the properties assigned to them (Caretaker field on each property): units with the current tenant's phone, move-in and move-out condition reports (management is notified; caretakers cannot delete reports or see deposit amounts), meter readings, and assigned repairs with a status, cost and note.
 - One app shell for every role: sidebar with live counts of items waiting for action; top bar with breadcrumbs, staff-wide search, a notifications bell, a user menu and a link to the public website. Account Settings lets every user change their password.
 - The public site and the back office are connected: Contact messages are saved as Enquiries, and new enquiries, viewing requests, tenant repair requests and complaints alert managers through the bell.
 - M-Pesa/Daraja is not integrated; payment methods are recorded manually.
@@ -52,9 +54,10 @@ Seeded user rows use a bundled development bcrypt hash. The original seed commen
 | Operations | Maintenance, Complaints, Enquiries, Notices | Super Admin, Property Manager |
 | Insights | Reports | Super Admin, Property Manager, Accountant |
 | Administration | User Accounts, Audit Log | Super Admin |
-| Landlord portal | My Properties, My Units, Condition Reports (read-only), Reports | Landlord (own properties only) |
+| Landlord portal | My Properties, My Units, My Tenants, Leases, Condition Reports, Rent Charges, Payments, Deposit Ledger, Utility Readings, Reports | Landlord (own properties only; cannot delete payments or deposit entries) |
+| Caretaker portal | Assigned Requests, Units (read-only), Meter Readings (no delete), Condition Reports (no delete) | Caretaker (assigned properties only) |
 
-The landlord pages reuse the staff property and unit definitions (`includes/resources.php`) with a *scope*. The engine adds the scope to every lookup, list, export, edit and delete, so a landlord cannot read or change another landlord's records, even by editing URLs. Leases, payments and tenants stay with management.
+The landlord and caretaker pages reuse the staff definitions (`includes/resources.php` for properties and units, `includes/tenancy_resources.php` for tenants, leases, charges, payments, deposits and readings) with a *scope*. The engine adds the scope to every lookup, list, export, select option, edit and delete, so a landlord or caretaker cannot read or change records outside their properties, even by editing URLs or form values. A landlord sees the tenants they registered (`tenants.landlord_id`) and anyone who has leased one of their units.
 
 ## Sample data and photos
 
@@ -73,7 +76,7 @@ Only Super Admin and Accountant can delete payments. Each module page in `admin/
 
 ## Reports
 
-Staff: `admin/reports.php`. Landlords: `landlord/reports.php` (own properties only). Available reports: rent collection, arrears, income statement, occupancy, expenses, maintenance, lease expiry, deposit ledger and tenant statement (staff only). Every report can be printed or saved as PDF from the browser, and downloaded as CSV for Excel.
+Staff: `admin/reports.php`. Landlords: `landlord/reports.php` (own properties only). Available reports: rent collection, arrears, income statement, occupancy, expenses, maintenance, lease expiry, deposit ledger and tenant statement (landlords see their own tenants, with only the charges and payments on their properties). Every report can be printed or saved as PDF from the browser, and downloaded as CSV for Excel.
 
 ## Tenant self-registration
 
