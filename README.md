@@ -82,7 +82,7 @@ Staff: `admin/reports.php`. Landlords: `landlord/reports.php` (own properties on
 
 When staff create a tenant profile first, the tenant can register with the same national ID and email to link a portal login to it. Other duplicate national IDs are refused with a message.
 
-The `database/schema.sql` file defines the database structure. Existing databases require a reviewed migration before schema changes; importing the schema will not alter their current tables.
+The `database/schema.sql` file defines the database structure (26 tables). `docs/DATABASE_SCHEMA.md` documents it with an entity relationship diagram and a data dictionary; after any schema change, regenerate it with `C:\xampp\php\php.exe tools\schema_doc.php`. Existing databases require a reviewed migration before schema changes; importing the schema will not alter their current tables.
 
 ## Testing
 

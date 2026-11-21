@@ -1,6 +1,9 @@
 CREATE DATABASE IF NOT EXISTS nairobi_property_db;
 USE nairobi_property_db;
 
+-- Complete schema of Urban Escape PHMS: 26 tables, up to and including migration 003.
+-- A fresh install from this file is identical to a database upgraded with migrations 001-003.
+-- Reference with ERD and data dictionary: docs/DATABASE_SCHEMA.md (regenerate with tools/schema_doc.php).
 -- Safe to re-run: existing tables and application data are preserved.
 
 -- 1. Roles Table
