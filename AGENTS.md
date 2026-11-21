@@ -92,11 +92,12 @@ database whose name does not end in `_test`.
   1.5 spacing, APA 7th). TETILE is a reference project on the same topic, so never reuse its text.
 
 ## Known state (21 Nov 2026, re-check before relying on it)
-- XAMPP MariaDB fails to start (InnoDB errors since 20 Nov). Back up `C:\xampp\mysql\data` before attempting recovery;
-  other projects share this server.
-- `nairobi_property_db` has not had migrations 002 and 003 applied, so sign-in fails there until they are applied after a backup.
-- While XAMPP's MariaDB is down, tests can run on a throwaway server: create a data folder with
+- XAMPP MariaDB runs again, but its log still reports InnoDB "log sequence number is in the future" on the shared
+  system tablespace (`ibdata1`). Back up before risky changes; other projects share this server.
+- `nairobi_property_db` has migrations 001-003 applied (21 Nov 2026) and holds only seed data. Backup taken first:
+  `../Documentation/08_Backups/nairobi_property_db_2026-11-21_before_migrations_002_003.sql`.
+- If XAMPP's MariaDB is down, tests can run on a throwaway server: create a data folder with
   `C:\xampp\mysql\bin\mysql_install_db.exe --datadir=<folder> --port=3307`, start `mysqld.exe --defaults-file=<folder>\my.ini`,
   then `pwsh -File tests\setup_test_database.ps1 -Port 3307` and set `$env:DB_PORT = '3307'` for the server and runner.
-- `main` is ahead of `origin/main`, and the branch `origin/improve/tenant-complaint-actions-password-toggle` is
-  unmerged. Ask before pushing or merging.
+- `main` matches `origin/main` after PR #2. The branch `origin/improve/tenant-complaint-actions-password-toggle` is
+  still unmerged. Ask before pushing or merging.
